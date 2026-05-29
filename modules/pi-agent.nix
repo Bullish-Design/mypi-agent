@@ -21,6 +21,15 @@ let
     exec "$launcher" "$@"
   '';
 
+  npmEnvCmd = ''
+    project_root="''${DEVENV_ROOT:-$PWD}"
+    export MYPI_PROJECT_ROOT="$project_root"
+    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/${cfg.root}/npm-global"
+    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/${cfg.root}/.npm-cache"
+    export NPM_CONFIG_AUDIT="false"
+    export NPM_CONFIG_FUND="false"
+  '';
+
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
     project_root="''${DEVENV_ROOT:-$PWD}"
     if [ ! -f "$project_root/.pi/settings.json" ] || [ "${cfg.bootstrap.mode}" = "every_entry" ]; then
@@ -61,6 +70,7 @@ in
     packages = [ mypiPkg mypiBin piAgentBin cfg.nodePackage ];
 
     enterShell = lib.mkAfter ''
+      ${npmEnvCmd}
       ${bootstrapCmd}
     '';
   };
