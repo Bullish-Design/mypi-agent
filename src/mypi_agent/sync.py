@@ -76,6 +76,11 @@ def _source_hash(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _sha256_json(payload: object) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _manifest_payload(pi_package_name: str, pi_version: str | None, node_version: str | None) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -98,6 +103,27 @@ def _load_npm_install_flags() -> list[str]:
     if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
         return ["--ignore-scripts", "--no-audit", "--no-fund"]
     return parsed
+
+
+def _load_lockfile_package_metadata(paths: Paths, pi_package_name: str) -> tuple[str | None, str | None]:
+    lockfile_path = paths.agent_root / "package-lock.json"
+    if not lockfile_path.exists():
+        return (None, None)
+    payload = _read_json(lockfile_path)
+    if not isinstance(payload, dict):
+        return (None, None)
+    packages = payload.get("packages")
+    if not isinstance(packages, dict):
+        return (None, None)
+    package_entry = packages.get(f"node_modules/{pi_package_name}")
+    if not isinstance(package_entry, dict):
+        return (None, None)
+    resolved = package_entry.get("resolved")
+    integrity = package_entry.get("integrity")
+    return (
+        resolved if isinstance(resolved, str) and resolved else None,
+        integrity if isinstance(integrity, str) and integrity else None,
+    )
 
 
 def run_sync(
@@ -167,6 +193,8 @@ def run_sync(
             node_version = node_version_result.stdout.strip()
 
     installed_version: str | None = None
+    npm_resolved_url: str | None = None
+    npm_integrity_hash: str | None = None
     if npm is None:
         warnings.append("pi_agent_install_skipped_no_npm")
     else:
@@ -195,6 +223,7 @@ def run_sync(
                     version_value = payload.get("version")
                     if isinstance(version_value, str) and version_value:
                         installed_version = version_value
+            npm_resolved_url, npm_integrity_hash = _load_lockfile_package_metadata(paths, pi_package_name)
             launcher = paths.agent_root / "bin" / "pi-agent"
             _ensure_dir(launcher.parent, created)
             launcher.write_text(
@@ -215,16 +244,6 @@ def run_sync(
                 },
                 created,
             )
-            registry_payload["installs"] = [
-                {
-                    "package": pi_package_name,
-                    "package_version": installed_version,
-                    "source_hash": _source_hash(
-                        f"{pi_package_name}@{installed_version or 'unknown'}"
-                    ),
-                    "installed_at_rfc3339_utc": _utc_now_rfc3339(),
-                }
-            ]
         else:
             warnings.append("pi_agent_install_failed")
 
@@ -233,6 +252,27 @@ def run_sync(
     if not pre_manifest_exists or not pre_manifest_valid:
         warnings.append("manifest_recreated")
         manifest_healed = True
+
+    settings_hash = _sha256_json(settings_payload)
+    manifest_hash = _sha256_json(manifest_payload)
+    source_identity = {
+        "package_name": pi_package_name,
+        "package_version": installed_version,
+        "npm_integrity_hash": npm_integrity_hash,
+        "npm_resolved_url": npm_resolved_url,
+    }
+    registry_payload["installs"] = [
+        {
+            "package_name": pi_package_name,
+            "package_version": installed_version or "",
+            "npm_resolved_url": npm_resolved_url,
+            "npm_integrity_hash": npm_integrity_hash,
+            "settings_hash": settings_hash,
+            "manifest_hash": manifest_hash,
+            "source_hash": _source_hash(json.dumps(source_identity, sort_keys=True)),
+            "installed_at_rfc3339_utc": _utc_now_rfc3339(),
+        }
+    ]
 
     if "core" not in (registry_payload.get("groups") or {}):
         raise RuntimeError("primitive registry missing required core group")
@@ -275,3 +315,23 @@ def run_sync(
         preserved_locally_modified_count=preserved_locally_modified_count,
         primitive_file_classifications=primitive_file_classifications,
     )
+    settings_hash = _sha256_json(settings_payload)
+    manifest_hash = _sha256_json(manifest_payload)
+    source_identity = {
+        "package_name": pi_package_name,
+        "package_version": installed_version,
+        "npm_integrity_hash": npm_integrity_hash,
+        "npm_resolved_url": npm_resolved_url,
+    }
+    registry_payload["installs"] = [
+        {
+            "package_name": pi_package_name,
+            "package_version": installed_version or "",
+            "npm_resolved_url": npm_resolved_url,
+            "npm_integrity_hash": npm_integrity_hash,
+            "settings_hash": settings_hash,
+            "manifest_hash": manifest_hash,
+            "source_hash": _source_hash(json.dumps(source_identity, sort_keys=True)),
+            "installed_at_rfc3339_utc": _utc_now_rfc3339(),
+        }
+    ]
