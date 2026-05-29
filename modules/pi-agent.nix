@@ -41,12 +41,6 @@ in
   options.piAgent = {
     enable = lib.mkEnableOption "MYPI agent tooling";
 
-    sourceRoot = lib.mkOption {
-      type = lib.types.str;
-      default = toString ../.;
-      description = "Reserved for future source overrides.";
-    };
-
     root = lib.mkOption {
       type = lib.types.str;
       default = ".agents/pi";
