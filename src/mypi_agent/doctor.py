@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from pydantic import ValidationError
 
 from .base_model import AlliumBase
@@ -43,6 +44,18 @@ def _secret_leak_likely(paths: Paths) -> bool:
     return False
 
 
+def _settings_payload(paths: Paths) -> dict[str, object] | None:
+    if not paths.settings_path.exists():
+        return None
+    try:
+        payload = json.loads(paths.settings_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
 def run_doctor(paths: Paths) -> DoctorResult:
     errors: list[str] = []
     diagnostics: list[dict[str, str]] = []
@@ -59,6 +72,29 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if _secret_leak_likely(paths):
         errors.append("secret_leak_likely")
         diagnostics.append({"code": "secret_leak_likely", "severity": "error"})
+    expected_prefix = paths.project_root / os.environ.get("MYPI_AGENT_ROOT", ".agents/pi") / "npm-global"
+    npm_prefix = os.environ.get("NPM_CONFIG_PREFIX", "")
+    if not npm_prefix:
+        errors.append("npm_scope_not_project_local")
+        diagnostics.append({"code": "npm_scope_not_project_local", "severity": "error"})
+    else:
+        try:
+            npm_prefix_path = Path(npm_prefix).resolve()
+            expected_prefix_path = expected_prefix.resolve()
+            if expected_prefix_path not in npm_prefix_path.parents and npm_prefix_path != expected_prefix_path:
+                errors.append("npm_scope_not_project_local")
+                diagnostics.append({"code": "npm_scope_not_project_local", "severity": "error"})
+        except OSError:
+            errors.append("npm_scope_not_project_local")
+            diagnostics.append({"code": "npm_scope_not_project_local", "severity": "error"})
+
+    settings_payload = _settings_payload(paths)
+    if settings_payload is not None:
+        marker = settings_payload.get("x-mypi-agent")
+        expected_root = f"../{os.environ.get('MYPI_AGENT_ROOT', '.agents/pi')}"
+        if not isinstance(marker, dict) or marker.get("agentRoot") != expected_root:
+            errors.append("settings_shim_not_pointing_to_configured_root")
+            diagnostics.append({"code": "settings_shim_not_pointing_to_configured_root", "severity": "error"})
     if shutil.which("node") is None:
         errors.append("missing_node")
         diagnostics.append({"code": "missing_node", "severity": "error"})
