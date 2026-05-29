@@ -77,3 +77,12 @@ def test_doctor_reports_pi_agent_not_executable(tmp_path):
     os.chmod(paths.pi_executable_path, 0o644)
     result = run_doctor(paths)
     assert "pi_agent_executable_not_executable" in result.errors
+
+
+def test_doctor_reports_manifest_schema_invalid(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.setenv("NPM_CONFIG_PREFIX", str(paths.agent_root / "npm-global"))
+    run_sync(paths, explicit=True, repair_shim=False)
+    paths.manifest_path.write_text('{"schema_version": 2}\n', encoding="utf-8")
+    result = run_doctor(paths)
+    assert "manifest_schema_invalid" in result.errors

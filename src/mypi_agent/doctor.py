@@ -21,18 +21,18 @@ class DoctorResult(AlliumBase):
     diagnostics: list[dict[str, str]]
 
 
-def _manifest_valid(paths: Paths) -> bool:
+def _manifest_status(paths: Paths) -> str:
     if not paths.manifest_path.exists():
-        return False
+        return "invalid_manifest"
     try:
         payload = json.loads(paths.manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return False
+        return "invalid_manifest"
     try:
         Manifest.model_validate(payload)
     except ValidationError:
-        return False
-    return True
+        return "manifest_schema_invalid"
+    return "ok"
 
 
 def _secret_leak_likely(paths: Paths) -> bool:
@@ -66,9 +66,13 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if not paths.agent_root.exists():
         errors.append("missing_agent_root")
         diagnostics.append({"code": "missing_agent_root", "severity": "error"})
-    if not _manifest_valid(paths):
+    manifest_status = _manifest_status(paths)
+    if manifest_status == "invalid_manifest":
         errors.append("invalid_manifest")
         diagnostics.append({"code": "invalid_manifest", "severity": "error"})
+    elif manifest_status == "manifest_schema_invalid":
+        errors.append("manifest_schema_invalid")
+        diagnostics.append({"code": "manifest_schema_invalid", "severity": "error"})
     if _secret_leak_likely(paths):
         errors.append("secret_leak_likely")
         diagnostics.append({"code": "secret_leak_likely", "severity": "error"})
