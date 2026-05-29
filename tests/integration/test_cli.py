@@ -148,3 +148,20 @@ def test_cli_discovers_project_root_from_subdirectory(tmp_path, monkeypatch):
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["project_root"] == str(project_root)
+
+
+def test_cli_sync_from_subdirectory_writes_to_project_root(tmp_path, monkeypatch):
+    project_root = tmp_path / "proj"
+    project_root.mkdir(parents=True)
+    (project_root / "devenv.yaml").write_text("inputs: {}\nimports: []\n", encoding="utf-8")
+    nested = project_root / "packages" / "example" / "src"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    monkeypatch.delenv("MYPI_ALLOW_UNMANAGED", raising=False)
+
+    result = runner.invoke(app, ["sync"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert (project_root / ".pi" / "settings.json").exists()
+    assert (project_root / ".agents" / "pi" / "manifest.json").exists()
+    assert not (nested / ".pi" / "settings.json").exists()
+    assert not (nested / ".agents" / "pi" / "manifest.json").exists()

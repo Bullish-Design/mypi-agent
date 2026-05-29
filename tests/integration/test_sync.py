@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import subprocess
 from pathlib import Path
 
 from mypi_agent.models import Paths
@@ -189,3 +190,23 @@ def test_sync_installs_pi_agent_with_fake_npm(tmp_path, monkeypatch):
     assert len(registry["installs"]) == 1
     assert registry["installs"][0]["source_hash"] != ""
     assert registry["installs"][0]["installed_at_rfc3339_utc"] != ""
+
+
+def test_sync_pinned_package_uses_name_at_version(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.setenv("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent")
+    monkeypatch.setenv("MYPI_PI_PACKAGE_VERSION", "1.2.3")
+    monkeypatch.setenv("MYPI_NPM_INSTALL_FLAGS", json.dumps(["--no-audit"]))
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+    run_sync(paths, explicit=True, repair_shim=False)
+    npm_installs = [cmd for cmd in captured if len(cmd) > 1 and cmd[0] == "/usr/bin/npm" and cmd[1] == "install"]
+    assert npm_installs
+    assert npm_installs[0][-1] == "@earendil-works/pi-coding-agent@1.2.3"
