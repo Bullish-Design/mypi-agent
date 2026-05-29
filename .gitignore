@@ -15,8 +15,16 @@ uv.lock
 .vendor/**
 **/.devenv/**
 **/.agents/**
+!/.agents/
+!/.agents/pi/
+!/.agents/pi/manifest.json
 **/.pi/**
-.pi/**
+!/.pi/
+!/.pi/settings.json
+.agents/pi/node_modules/
+.agents/pi/.npm-cache/
+.agents/pi/bin/
+.agents/pi/.state/
 
 
 # C extensions
