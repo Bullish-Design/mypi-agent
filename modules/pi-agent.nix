@@ -33,6 +33,9 @@ let
     export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/$root_rel/.npm-cache"
     export NPM_CONFIG_AUDIT="false"
     export NPM_CONFIG_FUND="false"
+    export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
+    export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
+    export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
   '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
@@ -56,6 +59,24 @@ in
       type = lib.types.package;
       default = pkgs.nodejs_22;
       description = "Node.js package for Pi/npm installation and operations.";
+    };
+
+    piPackageName = lib.mkOption {
+      type = lib.types.str;
+      default = "@earendil-works/pi-coding-agent";
+      description = "NPM package name for the Pi coding agent.";
+    };
+
+    piPackageVersion = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Pinned Pi package version. Required for reproducible pinned installs.";
+    };
+
+    npmInstallFlags = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
+      description = "Additional flags passed to npm install for Pi package installation.";
     };
 
     bootstrap.mode = lib.mkOption {
