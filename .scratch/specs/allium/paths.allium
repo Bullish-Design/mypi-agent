@@ -1,0 +1,107 @@
+-- allium: 3
+
+-- Path resolution and project root discovery.
+-- R-016: mypi must discover the repository/devenv root.
+-- R-017: mypi should only operate inside a devenv-managed project by default.
+
+use "./core.allium" as core
+
+entity ProjectRoot {
+    discovered: Boolean
+    source: env_variable | walk_upward | unresolved
+    path: String when discovered
+    is_devenv_managed: Boolean when discovered
+}
+
+entity PathsSurface {
+    command_available: Boolean
+    project_root_exposed: Boolean
+    shim_path_exposed: Boolean
+    agent_root_exposed: Boolean
+    manifest_path_exposed: Boolean
+    pi_executable_path_exposed: Boolean
+    node_path_exposed: Boolean
+    npm_prefix_exposed: Boolean
+}
+
+surface PathsCommandSurface {
+    facing _: PathsSurface
+
+    provides:
+        PathsRequested()
+}
+
+-- R-016: Project root discovery
+
+rule DiscoverProjectRoot {
+    when: MypiInvoked()
+    ensures: if ShellEnvironment.mypi_project_root != "":
+        ProjectRoot.discovered = true
+        ProjectRoot.source = env_variable
+        ProjectRoot.path = ShellEnvironment.mypi_project_root
+    ensures: if ShellEnvironment.mypi_project_root = "":
+        WalkUpwardForRoot()
+    @guidance
+        -- 1. If MYPI_PROJECT_ROOT is set by the Nix wrapper, use it.
+        -- 2. Otherwise walk upward from cwd until finding devenv.nix,
+        --    devenv.yaml, or another explicit project marker.
+        -- 3. If no devenv-managed root is found, fail by default.
+}
+
+rule WalkUpwardDiscovery {
+    when: WalkUpwardForRoot()
+    ensures: if found_devenv_marker:
+        ProjectRoot.discovered = true
+        ProjectRoot.source = walk_upward
+        ProjectRoot.is_devenv_managed = true
+    ensures: if not found_devenv_marker:
+        ProjectRoot.discovered = false
+        ProjectRoot.source = unresolved
+    @guidance
+        -- Walk from cwd upward looking for devenv.nix or devenv.yaml.
+        -- Stop at filesystem root.
+}
+
+-- R-017: Reject unmanaged directories
+
+rule RejectUnmanagedDirectory {
+    when: MypiInvoked()
+    requires: not ProjectRoot.discovered or not ProjectRoot.is_devenv_managed
+    ensures: ProjectRootError(reason: "not_devenv_managed")
+    @guidance
+        -- Print: "error: mypi must be run inside a devenv-managed project"
+        -- Exit with code 1.
+        -- Override with --allow-unmanaged flag or MYPI_ALLOW_UNMANAGED=1 env var.
+}
+
+-- Expose resolved paths
+
+rule ExposeResolvedPaths {
+    when: PathsRequested()
+    requires: ProjectRoot.discovered
+    ensures: PathsSurface.command_available = true
+    ensures: PathsSurface.project_root_exposed = true
+    ensures: PathsSurface.shim_path_exposed = true
+    ensures: PathsSurface.agent_root_exposed = true
+    ensures: PathsSurface.manifest_path_exposed = true
+    ensures: PathsSurface.pi_executable_path_exposed = true
+    ensures: PathsSurface.node_path_exposed = true
+    ensures: PathsSurface.npm_prefix_exposed = true
+}
+
+invariant PathsOutputIsCompleteWhenAvailable {
+    PathsSurface.command_available implies
+        PathsSurface.project_root_exposed
+        and PathsSurface.shim_path_exposed
+        and PathsSurface.agent_root_exposed
+        and PathsSurface.manifest_path_exposed
+        and PathsSurface.pi_executable_path_exposed
+        and PathsSurface.node_path_exposed
+        and PathsSurface.npm_prefix_exposed
+}
+
+invariant SubdirectoryInvocationUsesProjectRoot {
+    -- R-016/R-032: Running mypi from a subdirectory still targets the repo root
+    ProjectRoot.discovered implies
+        AgentRoot.path = ProjectRoot.path + "/" + ModuleOptions.root
+}

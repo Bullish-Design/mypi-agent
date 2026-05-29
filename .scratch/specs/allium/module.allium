@@ -1,0 +1,107 @@
+-- allium: 3
+
+-- Public import surface contract for mypi-agent.
+-- Defines how downstream devenv-managed projects consume this library
+-- and enforces isolation between the public module and private development environment.
+
+use "./core.allium" as core
+
+-- The public import surface: what a consumer gets when they add
+-- `imports: - mypi-agent` to their devenv.yaml.
+
+entity PublicImportSurface {
+    exposes_pi_agent_module: Boolean
+    configures_allium: Boolean
+    imports_allium_env: Boolean
+    includes_development_packages: Boolean
+    includes_python_venv: Boolean
+}
+
+-- The private development environment used only for building/testing this library.
+
+entity PrivateDevelopmentEnv {
+    location: String
+    imports_allium_env: Boolean
+    has_python_venv: Boolean
+    has_uv: Boolean
+    has_test_tasks: Boolean
+    isolated_from_public_surface: Boolean
+}
+
+-- A downstream consumer project that imports mypi-agent.
+
+entity ConsumerProject {
+    has_devenv_yaml_import: Boolean
+    has_mypi_on_path: Boolean
+    has_node_on_path: Boolean
+    has_npm_on_path: Boolean
+    has_pi_agent_root: Boolean
+    has_settings_shim: Boolean
+    evaluates_allium_options: Boolean
+    requires_allium_env_input: Boolean
+}
+
+surface DevenvImportSurface {
+    facing consumer: ConsumerProject
+
+    exposes:
+        consumer.has_mypi_on_path
+        consumer.has_node_on_path
+        consumer.has_npm_on_path
+        consumer.has_pi_agent_root
+        consumer.has_settings_shim
+
+    @guarantee MinimalPublicSurface
+        -- The root devenv.nix imports only ./modules/pi-agent.nix
+        -- and sets piAgent.enable = lib.mkDefault true.
+        -- It does not include allium-env, Python venvs, uv, or
+        -- other development-only dependencies.
+
+    @guarantee AlliumFreeConsumer
+        -- A consumer importing mypi-agent never evaluates allium.enable,
+        -- allium.specsDir, allium.codexSkills, or any allium-env option.
+}
+
+-- R-001: Root import must expose modules/pi-agent.nix
+
+rule RootImportExposesModule {
+    when: ConsumerProject.has_devenv_yaml_import = true
+    ensures: PublicImportSurface.exposes_pi_agent_module = true
+    ensures: ConsumerProject.has_mypi_on_path = true
+    ensures: ConsumerProject.has_node_on_path = true
+    ensures: ConsumerProject.has_npm_on_path = true
+    ensures: ConsumerProject.has_pi_agent_root = true
+    ensures: ConsumerProject.has_settings_shim = true
+}
+
+-- R-002: Development environment is private
+
+rule DevelopmentEnvIsPrivate {
+    when: ShellEntered()
+    ensures: PrivateDevelopmentEnv.isolated_from_public_surface = true
+    @guidance
+        -- The development shell lives in dev/devenv.nix and dev/devenv.yaml.
+        -- It is not loaded when a consumer uses imports: - mypi-agent.
+}
+
+-- R-003: allium-env is not in the public path
+
+invariant AlliumNotInPublicSurface {
+    not PublicImportSurface.configures_allium
+    and not PublicImportSurface.imports_allium_env
+}
+
+invariant ConsumerDoesNotRequireAllium {
+    ConsumerProject.has_devenv_yaml_import implies
+        not ConsumerProject.evaluates_allium_options
+        and not ConsumerProject.requires_allium_env_input
+}
+
+invariant PublicSurfaceIsMinimal {
+    not PublicImportSurface.includes_development_packages
+    and not PublicImportSurface.includes_python_venv
+}
+
+invariant PrivateDevEnvIsIsolated {
+    PrivateDevelopmentEnv.isolated_from_public_surface
+}

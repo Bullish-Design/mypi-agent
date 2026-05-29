@@ -1,12 +1,38 @@
 -- allium: 3
 
+-- All user-facing command surfaces for mypi CLI.
+-- R-008: All user-facing operations go through mypi.
+-- R-009: mypi run must either run something or be removed.
+-- R-013: Content-aware settings shim classification.
+-- R-022: mypi needs-sync lightweight check.
+
+use "./core.allium" as core
+
+entity SettingsShim {
+    exists: Boolean
+    classification: missing | managed_unchanged | managed_changed | user_owned | user_modified | invalid_json
+    points_to_configured_root: Boolean
+    managed_keys: List<String>
+    marker_present: Boolean
+    marker_schema_version: Integer when marker_present
+}
+
+-- Shell entry surface
+
 surface ShellEntrySurface {
     facing _: SettingsShim
 
     provides:
         ShellEntered()
         DesiredStateChanged()
+
+    @guarantee VisibleBootstrap
+        -- R-021: Shell bootstrap must not silently swallow failures.
+        -- Errors are visible. Normal no-op shell entry is quiet.
+        -- Bootstrap does not repeatedly perform expensive network installs.
 }
+
+-- Main mypi command surface
 
 surface MypiCommand {
     facing _: SettingsShim
@@ -28,16 +54,62 @@ surface MypiCommand {
         -- The wrapper delegates to Pi CLI and preserves arguments and exit behavior.
 }
 
+-- R-008: mypi agent command - the real Pi launcher
+
+surface AgentCommandSurface {
+    facing _: PiExecutable
+
+    provides:
+        AgentRequested(args: List<String>)
+
+    exposes:
+        PiExecutable.installed
+        PiExecutable.path_exists
+        PiExecutable.is_executable
+        PiExecutable.version_check_passed
+
+    @guarantee PiDelegation
+        -- mypi agent forwards all arguments to the Pi executable.
+        -- Exit code is preserved from the Pi process.
+        -- If Pi is not installed, emits a clear error directing
+        -- the user to run mypi sync.
+}
+
+rule AgentLaunchesPi {
+    when: AgentRequested(args)
+    requires: PiExecutable.path_exists and PiExecutable.is_executable
+    ensures: PiLaunched(args)
+    @guidance
+        -- Execute the Pi binary at the configured path, forwarding all args.
+        -- Preserve stdin/stdout/stderr and exit code.
+}
+
+rule AgentFailsWhenPiMissing {
+    when: AgentRequested(args)
+    requires: not PiExecutable.path_exists or not PiExecutable.is_executable
+    ensures: AgentError(reason: "pi_not_available")
+    @guidance
+        -- Print: "error: Pi is not installed. Run: mypi sync"
+        -- Exit with code 1.
+}
+
+-- Sync command surface
+
 surface SyncCommandSurface {
     facing _: SettingsShim
 
     provides:
-        SyncRequested(explicit: true, repair_shim: false)
-        SyncRequested(explicit: true, repair_shim: true)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: true, diff_requested: false, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
 
     exposes:
+        SettingsShim.classification
         SyncRun.explicit
         SyncRun.repair_shim
+        SyncRun.diff_requested
+        SyncRun.trigger
         SyncRun.completed
         SyncRun.existing_files_overwritten
         SyncRun.bootstrap_performed
@@ -45,13 +117,57 @@ surface SyncCommandSurface {
         SyncRun.shim_updated
         SyncRun.advisory_shown
         SyncRun.upgrade_requires_explicit_sync
+        SyncRun.write_actions
         InstalledManifest.exists
         InstalledManifest.valid_json
+        InstalledManifest.schema_valid
         SettingsShim.points_to_configured_root
 
     @guarantee NonDestructiveDefault
-        -- Default sync creates missing files and preserves existing user edits.
+        -- Explicit sync creates missing files and does not overwrite existing files by default.
+
+    @guarantee DiffIsReadOnly
+        -- R-010: When --diff is set, the sync plan is printed and no filesystem writes occur.
 }
+
+-- R-022: mypi needs-sync lightweight check
+
+surface NeedsSyncSurface {
+    facing _: SettingsShim
+
+    provides:
+        NeedsSyncRequested(trigger: shell | manual)
+
+    exposes:
+        NeedsSyncResult.sync_needed
+        NeedsSyncResult.reason
+
+    @guarantee Lightweight
+        -- needs-sync compares a config hash/state file rather than
+        -- performing full sync planning. It does not mutate the filesystem.
+}
+
+entity NeedsSyncResult {
+    sync_needed: Boolean
+    reason: String when sync_needed
+}
+
+rule NeedsSyncChecksConfigHash {
+    when: NeedsSyncRequested(trigger)
+    ensures: NeedsSyncResult.sync_needed =
+        not AgentRoot.exists
+        or not SettingsShim.exists
+        or not InstalledManifest.exists
+        or DesiredState.hash_inputs_changed
+    ensures: if NeedsSyncResult.sync_needed:
+        NeedsSyncResult.reason = "state_drift_detected"
+    @guidance
+        -- Hash inputs include: piAgent.root, Pi package name/version,
+        -- npm install flags, managed settings schema version,
+        -- managed resources manifest schema version, mypi-agent version.
+}
+
+-- Doctor command surface
 
 surface DoctorCommandSurface {
     facing _: SettingsShim
@@ -65,4 +181,23 @@ surface DoctorCommandSurface {
         DoctorRun.error_count
         DoctorRun.computed_error_count
         DoctorRun.exit_code
+}
+
+-- Paths command surface
+
+surface PathsCommandSurface {
+    facing _: SettingsShim
+
+    provides:
+        PathsRequested()
+
+    exposes:
+        PathsSurface.command_available
+        PathsSurface.project_root_exposed
+        PathsSurface.shim_path_exposed
+        PathsSurface.agent_root_exposed
+        PathsSurface.manifest_path_exposed
+        PathsSurface.pi_executable_path_exposed
+        PathsSurface.node_path_exposed
+        PathsSurface.npm_prefix_exposed
 }

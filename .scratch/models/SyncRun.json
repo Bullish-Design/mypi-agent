@@ -1,41 +1,20 @@
 {
   "fields": [
-    {
-      "name": "explicit",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "repair_shim",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "completed",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "existing_files_overwritten",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "advisory_shown",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "upgrade_requires_explicit_sync",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "bootstrap_performed",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "manifest_healed",
-      "type_expr": "Boolean"
-    },
-    {
-      "name": "shim_updated",
-      "type_expr": "Boolean"
-    }
+    {"name": "explicit", "type_expr": "Boolean"},
+    {"name": "repair_shim", "type_expr": "Boolean"},
+    {"name": "completed", "type_expr": "Boolean"},
+    {"name": "existing_files_overwritten", "type_expr": "Boolean"},
+    {"name": "advisory_shown", "type_expr": "Boolean"},
+    {"name": "upgrade_requires_explicit_sync", "type_expr": "Boolean"},
+    {"name": "bootstrap_performed", "type_expr": "Boolean"},
+    {"name": "manifest_healed", "type_expr": "Boolean"},
+    {"name": "shim_updated", "type_expr": "Boolean"},
+    {"name": "hash_inputs_changed", "type_expr": "Boolean"},
+    {"name": "diff_requested", "type_expr": "Boolean"},
+    {"name": "upgrade_target", "type_expr": "all | single | none"},
+    {"name": "would_create_count", "type_expr": "Integer"},
+    {"name": "would_upgrade_count", "type_expr": "Integer"},
+    {"name": "preserved_locally_modified_count", "type_expr": "Integer"}
   ],
   "kind": "internal",
   "name": "SyncRun"

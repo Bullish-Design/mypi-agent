@@ -56,8 +56,8 @@ testpaths = ["tests"]
 
 [tool.ty]
 
-[tool.ty.environment]
-root = ["."]
+#[tool.ty.environment]
+#root = ["."]
 
 [tool.ty.src]
 include = ["src", "tests"]

@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from .base_model import AlliumBase
 from .models import Paths
 
 
-@dataclass(frozen=True)
-class SettingsShimActor:
+class SettingsShimActor(AlliumBase):
     exists: bool
     locally_modified: bool
     points_to_configured_root: bool
 
 
-@dataclass(frozen=True)
-class SurfaceContext:
+class SurfaceContext(AlliumBase):
     surface_name: str
     actor: object
 

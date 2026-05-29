@@ -1,27 +1,21 @@
 -- allium: 3
 
 entity UseTopologyPolicy {
-    per_file_use_graph_built: Boolean
-    trigger_providers_consumers_coevaluated: Boolean
-    analysis_unit_is_single_per_file_graph: Boolean
+    topology_enforcement_descope_active: Boolean
 }
 
-rule BuildPerFileUseGraph {
+surface LocalTopologyTriggers {
+    facing _: UseTopologyPolicy
+
+    provides:
+        ShellEntered()
+}
+
+rule RecordTopologyDescopeDecision {
     when: ShellEntered()
-    ensures: UseTopologyPolicy.per_file_use_graph_built = true
-    ensures: UseTopologyPolicy.analysis_unit_is_single_per_file_graph = true
-    ensures: PerFileUseGraphBuilt()
+    ensures: UseTopologyPolicy.topology_enforcement_descope_active = true
 }
 
-rule CoevaluateTriggerProvidersConsumers {
-    when: PerFileUseGraphBuilt()
-    ensures: UseTopologyPolicy.trigger_providers_consumers_coevaluated = true
-}
-
-invariant PerFileUseTopologyIsSingleAnalysisUnit {
-    UseTopologyPolicy.analysis_unit_is_single_per_file_graph
-}
-
-invariant ProvidersConsumersEvaluatedTogether {
-    UseTopologyPolicy.trigger_providers_consumers_coevaluated
+invariant TopologyPolicyExplicitlyDescoped {
+    UseTopologyPolicy.topology_enforcement_descope_active
 }

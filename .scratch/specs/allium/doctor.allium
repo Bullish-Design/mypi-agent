@@ -1,5 +1,38 @@
 -- allium: 3
 
+-- Health check specification for mypi doctor.
+-- R-007: Pi executable must be verified by doctor.
+-- Doctor must fail when Pi is missing or unusable.
+
+use "./core.allium" as core
+
+entity DoctorRun {
+    requested: Boolean
+    checks_completed: Boolean
+    error_count: Integer
+    computed_error_count: Integer
+    exit_code: Integer
+}
+
+surface LocalDoctorTriggers {
+    facing _: AgentRoot
+
+    provides:
+        DoctorRequested()
+        DoctorError(reason: "missing_settings_shim")
+        DoctorError(reason: "missing_agent_root")
+        DoctorError(reason: "invalid_manifest")
+        DoctorError(reason: "manifest_schema_invalid")
+        DoctorError(reason: "secret_leak_likely")
+        DoctorError(reason: "missing_node")
+        DoctorError(reason: "missing_npm")
+        DoctorError(reason: "missing_pi_agent_executable")
+        DoctorError(reason: "pi_agent_executable_not_executable")
+        DoctorError(reason: "pi_agent_version_check_failed")
+        DoctorError(reason: "npm_scope_not_project_local")
+        DoctorError(reason: "settings_shim_not_pointing_to_configured_root")
+}
+
 rule DoctorRunStarted {
     when: DoctorRequested()
     ensures: DoctorRun.requested = true
@@ -10,14 +43,41 @@ rule DoctorRunStarted {
 
 rule DoctorPerformsRequiredChecks {
     when: DoctorRequested()
+
+    -- Existing checks
     ensures: if not SettingsShim.exists:
         DoctorError(reason: "missing_settings_shim")
     ensures: if not AgentRoot.exists:
         DoctorError(reason: "missing_agent_root")
     ensures: if not InstalledManifest.valid_json:
         DoctorError(reason: "invalid_manifest")
+    ensures: if not InstalledManifest.schema_valid:
+        DoctorError(reason: "manifest_schema_invalid")
     ensures: if SecretRuntimePolicy.secrets_written_to_generated_config or SecretRuntimePolicy.secrets_available_at_evaluation_time:
         DoctorError(reason: "secret_leak_likely")
+
+    -- R-007: Node/npm checks
+    ensures: if not NodeRuntime.node_available:
+        DoctorError(reason: "missing_node")
+    ensures: if not NodeRuntime.npm_available:
+        DoctorError(reason: "missing_npm")
+
+    -- R-007: Pi executable checks
+    ensures: if not PiExecutable.path_exists:
+        DoctorError(reason: "missing_pi_agent_executable")
+    ensures: if PiExecutable.path_exists and not PiExecutable.is_executable:
+        DoctorError(reason: "pi_agent_executable_not_executable")
+    ensures: if PiExecutable.path_exists and PiExecutable.is_executable and not PiExecutable.version_check_passed:
+        DoctorError(reason: "pi_agent_version_check_failed")
+
+    -- npm scope check
+    ensures: if not NpmScope.prefix_is_project_local or not NpmScope.cache_is_project_local:
+        DoctorError(reason: "npm_scope_not_project_local")
+
+    -- Settings shim root check
+    ensures: if SettingsShim.exists and not SettingsShim.points_to_configured_root:
+        DoctorError(reason: "settings_shim_not_pointing_to_configured_root")
+
     ensures: DoctorRun.checks_completed = true
 }
 
@@ -37,4 +97,17 @@ rule DoctorExitCodePolicy {
         DoctorRun.exit_code = 1
     ensures: if DoctorRun.computed_error_count = 0:
         DoctorRun.exit_code = 0
+}
+
+-- Doctor must not pass when Pi is missing (R-007 acceptance criteria)
+invariant DoctorFailsWhenPiMissing {
+    DoctorRun.checks_completed and not PiExecutable.path_exists implies DoctorRun.exit_code = 1
+}
+
+invariant DoctorFailsWhenNodeMissing {
+    DoctorRun.checks_completed and not NodeRuntime.node_available implies DoctorRun.exit_code = 1
+}
+
+invariant DoctorFailsWhenNpmMissing {
+    DoctorRun.checks_completed and not NodeRuntime.npm_available implies DoctorRun.exit_code = 1
 }

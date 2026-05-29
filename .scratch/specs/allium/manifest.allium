@@ -1,0 +1,79 @@
+-- allium: 3
+
+-- Schema-based manifest validation specification.
+-- R-014: Manifest validation must be schema-based.
+
+use "./core.allium" as core
+
+-- R-014: Manifest schema entity matching the Pydantic model
+
+entity Manifest {
+    schema_version: Integer
+    resources: List<String>
+    pi_package: String
+    pi_version: String?
+    node_version: String?
+    generated_by: String
+}
+
+Given Manifest {
+    schema_version: 1
+    resources: ["extensions", "skills", "prompts", "themes"]
+    pi_package: "@earendil-works/pi-coding-agent"
+    pi_version: null
+    node_version: null
+    generated_by: "mypi-agent"
+}
+
+-- Manifest validation rules
+
+rule ManifestSchemaValidation {
+    when: SyncCompleted()
+    ensures: InstalledManifest.schema_valid = true
+    ensures: Manifest.schema_version = 1
+    ensures: Manifest.pi_package != ""
+    ensures: Manifest.generated_by = "mypi-agent"
+    ensures: Manifest.resources.count > 0
+    @guidance
+        -- Validate using the Pydantic model:
+        -- class Manifest(BaseModel):
+        --     schema_version: Literal[1]
+        --     resources: list[Literal["extensions", "skills", "prompts", "themes"]]
+        --     pi_package: str
+        --     pi_version: str | None = None
+        --     node_version: str | None = None
+        --     generated_by: str = "mypi-agent"
+        -- doctor and sync should use this same schema.
+}
+
+rule ManifestRecordsPiVersion {
+    when: SyncCompleted()
+    requires: PiExecutable.installed
+    ensures: Manifest.pi_version = PiPackage.installed_version
+    ensures: if NodeRuntime.node_available:
+        Manifest.node_version = NodeRuntime.node_version
+}
+
+-- R-014: Manifest resources must be from the known set
+
+invariant ManifestSchemaVersionPinned {
+    InstalledManifest.schema_valid implies Manifest.schema_version = 1
+}
+
+invariant ManifestResourcesAreKnown {
+    for resource in Manifest.resources:
+        resource in {"extensions", "skills", "prompts", "themes"}
+}
+
+invariant ManifestHasRequiredFields {
+    InstalledManifest.schema_valid implies
+        Manifest.pi_package != ""
+        and Manifest.generated_by = "mypi-agent"
+        and Manifest.schema_version = 1
+}
+
+invariant ManifestAndDoctorShareSchema {
+    -- doctor and sync must use the same manifest schema
+    -- This is enforced by both referencing the Manifest entity
+    InstalledManifest.schema_valid = (Manifest.schema_version = 1 and Manifest.pi_package != "")
+}

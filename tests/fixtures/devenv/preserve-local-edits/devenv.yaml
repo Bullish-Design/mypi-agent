@@ -1,0 +1,4 @@
+inputs:
+  mypi-agent:
+    url: path:__REPO_ROOT__
+    flake: false

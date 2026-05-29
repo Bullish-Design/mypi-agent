@@ -1,0 +1,109 @@
+-- allium: 3
+
+-- Nix module option set specification.
+-- Defines the full piAgent option shape for modules/pi-agent.nix.
+-- R-004: nodePackage for npm-capable runtime.
+-- R-005: Deterministic Pi installation with version pinning.
+-- R-006: Repo-scoped npm configuration.
+-- R-018: Remove or implement sourceRoot.
+-- R-019: Robust shell quoting.
+-- R-020: Consistent Python version pinning.
+
+use "./core.allium" as core
+
+-- The Nix module option set as an entity.
+-- Each field corresponds to a lib.mkOption in modules/pi-agent.nix.
+
+entity ModuleOptions {
+    enable: Boolean
+    root: String
+    node_package: String
+    pi_package_name: String
+    pi_package_version: String?
+    npm_install_flags: List<String>
+    bootstrap_mode: first_entry_only | manual_only | every_entry
+    expose_pi_agent_shim: Boolean
+}
+
+Given ModuleOptions {
+    enable: true
+    root: ".agents/pi"
+    node_package: "pkgs.nodejs_22"
+    pi_package_name: "@earendil-works/pi-coding-agent"
+    pi_package_version: null
+    npm_install_flags: ["--ignore-scripts", "--no-audit", "--no-fund"]
+    bootstrap_mode: first_entry_only
+    expose_pi_agent_shim: false
+}
+
+-- Environment variables set by the module in the devenv shell.
+
+entity ShellEnvironment {
+    mypi_agent_root: String
+    mypi_project_root: String
+    npm_config_prefix: String
+    npm_config_cache: String
+    npm_config_audit: String
+    npm_config_fund: String
+}
+
+-- R-006: npm configuration must be repo-scoped
+
+rule ModuleConfiguresNpmScope {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ShellEnvironment.mypi_agent_root = ModuleOptions.root
+    ensures: ShellEnvironment.npm_config_prefix = ModuleOptions.root + "/npm-global"
+    ensures: ShellEnvironment.npm_config_cache = ModuleOptions.root + "/.npm-cache"
+    ensures: ShellEnvironment.npm_config_audit = "false"
+    ensures: ShellEnvironment.npm_config_fund = "false"
+    ensures: NpmScope.prefix_is_project_local = true
+    ensures: NpmScope.cache_is_project_local = true
+    ensures: NpmScope.audit_disabled = true
+    ensures: NpmScope.fund_disabled = true
+}
+
+-- R-004: Module provides node and npm on PATH
+
+rule ModuleProvidesNodeRuntime {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: NodeRuntime.node_available = true
+    ensures: NodeRuntime.npm_available = true
+    ensures: NodeRuntime.npx_available = true
+    @guidance
+        -- The module adds cfg.nodePackage to the shell packages list.
+        -- This provides node, npm, and npx on PATH.
+        -- Recommended Nix shape:
+        -- packages = [ mypiBin cfg.nodePackage ];
+}
+
+-- R-008: Expose mypi on PATH, optionally expose pi-agent shim
+
+rule ModuleExposesCliTools {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ConsumerProject.has_mypi_on_path = true
+    ensures: if ModuleOptions.expose_pi_agent_shim:
+        PiAgentShimAvailable()
+    @guidance
+        -- Default: only mypi is on PATH.
+        -- If exposePiAgentShim = true, also add the pi-agent compatibility wrapper.
+}
+
+-- R-019: Shell quoting must be robust
+
+invariant ShellQuotingIsRobust {
+    -- All cfg values interpolated into shell scripts must use lib.escapeShellArg.
+    -- The root must be validated as project-relative.
+    ModuleOptions.enable implies
+        ShellEnvironment.mypi_agent_root = ModuleOptions.root
+}
+
+-- R-018: sourceRoot must be removed
+
+open question "sourceRoot has been removed as R-018 requires. If a concrete override behavior is needed later, it should be added with actual effect on package/module source selection."
+
+-- R-020: Python version consistency
+
+open question "pyproject.toml requires >=3.13 but packages/mypi-agent-cli.nix uses generic python3Packages. The Nix package should use python313Packages or a configurable Python package set."

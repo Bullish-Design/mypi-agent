@@ -1,6 +1,91 @@
 -- allium: 3
 
+-- Package provisioning specification.
+-- R-004: Module must provide npm-capable runtime tooling.
+-- R-005: npm install behavior must be deterministic or explicitly declared.
+
+use "./core.allium" as core
+
+entity NodePackage {
+    provided_by_module: Boolean
+    node_path: String when provided_by_module
+    npm_path: String when provided_by_module
+    npx_path: String when provided_by_module
+}
+
+entity PiPackage {
+    name: String
+    version: String?
+    install_strategy: nix_packaged | pinned_npm | floating_npm
+    npm_install_flags: List<String>
+    installed_version: String when PiExecutable.installed
+    installed_integrity_hash: String when PiExecutable.installed
+}
+
+Given PiPackage {
+    name: "@earendil-works/pi-coding-agent"
+    version: null
+    install_strategy: pinned_npm
+    npm_install_flags: ["--ignore-scripts", "--no-audit", "--no-fund"]
+}
+
+surface LocalPackageTriggers {
+    facing _: InstalledManifest
+
+    provides:
+        SyncCompleted()
+}
+
+-- R-005: Version pinning validation
+
 rule PackagePinsValidated {
     when: SyncCompleted()
+    ensures: if PiPackage.install_strategy = pinned_npm:
+        PiPackage.version != null
     ensures: PackagePinsChecked()
+    @guidance
+        -- If install_strategy is pinned_npm, version must be set.
+        -- The install command must include the exact version:
+        -- npm install --prefix "$MYPI_AGENT_ROOT" \
+        --   ${npmInstallFlags} \
+        --   "${piPackageName}@${piPackageVersion}"
+}
+
+rule PackageInstallRecordedInManifest {
+    when: SyncCompleted()
+    requires: PiExecutable.installed
+    ensures: Manifest.pi_package = PiPackage.name
+    ensures: Manifest.pi_version = PiPackage.installed_version
+    @guidance
+        -- After npm install, record the exact installed version
+        -- (from node_modules/<package>/package.json) in the manifest.
+}
+
+-- R-005: Preferred strategy - Nix-packaged Pi
+
+rule NixPackagedPiAvailable {
+    when: ShellEntered()
+    requires: PiPackage.install_strategy = nix_packaged
+    ensures: PiExecutable.installed = true
+    ensures: PiExecutable.path_exists = true
+    ensures: PiExecutable.is_executable = true
+    @guidance
+        -- When install_strategy is nix_packaged, Pi is provided
+        -- as a Nix derivation through packages/pi-coding-agent.nix.
+        -- No runtime npm registry access is needed.
+        -- This is the preferred long-term strategy.
+}
+
+invariant NodePackageProvidedByModule {
+    NodePackage.provided_by_module
+}
+
+invariant PinnedNpmRequiresVersion {
+    PiPackage.install_strategy = pinned_npm implies PiPackage.version != null
+}
+
+invariant FloatingNpmIsExplicit {
+    -- Floating versions must be an explicit choice, not an accident
+    PiPackage.install_strategy = floating_npm implies
+        PiPackage.version = null
 }

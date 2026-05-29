@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from .base_model import AlliumBase
 
 
-@dataclass(frozen=True)
-class RuntimePolicyResult:
+class RuntimePolicyResult(AlliumBase):
     runtime_env_load_attempted: bool
     runtime_env_load_completed: bool
     config_write_attempted: bool

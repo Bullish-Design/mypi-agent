@@ -1,0 +1,125 @@
+-- allium: 3
+
+-- Upgrade planning, diff mode, and drift detection.
+-- R-013: File classification must be content-aware.
+
+use "./core.allium" as core
+
+entity DesiredState {
+    hash_inputs_changed: Boolean
+    advisory_emitted: Boolean
+    config_hash: String
+}
+
+-- R-013: Content-aware file classification
+
+entity PrimitiveFileState {
+    path: String
+    classification: missing | managed_unchanged | managed_changed | user_owned | user_modified | invalid_json
+    content_hash: String when classification != missing
+    expected_hash: String when classification in {managed_unchanged, managed_changed}
+}
+
+entity SyncPlan {
+    diff_requested: Boolean
+    upgrade_target: all | single | none
+    would_create_count: Integer
+    would_upgrade_count: Integer
+    preserved_locally_modified_count: Integer
+    classified_files: List<PrimitiveFileState>
+}
+
+surface UpgradePlanningSurface {
+    facing _: SyncPlan
+
+    provides:
+        DesiredStateChanged()
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)
+}
+
+-- R-022: Hash inputs for needs-sync detection
+
+rule DesiredStateHashComputation {
+    when: ShellEntered()
+    ensures: DesiredState.config_hash = hash(
+        AgentRoot.path,
+        Manifest.pi_package,
+        Manifest.pi_version,
+        SettingsMergePolicy.marker_schema_version,
+        Manifest.schema_version
+    )
+    @guidance
+        -- Hash inputs include: piAgent.root, Pi package name/version,
+        -- npm install flags, managed settings schema version,
+        -- manifest schema version, mypi-agent version.
+}
+
+rule DesiredStateHashAdvisory {
+    when: DesiredStateChanged()
+    requires: DesiredState.hash_inputs_changed
+    ensures: DesiredState.advisory_emitted = true
+}
+
+rule NoAdvisoryWithoutHashInputChange {
+    when: DesiredStateChanged()
+    requires: not DesiredState.hash_inputs_changed
+    ensures: DesiredState.advisory_emitted = false
+}
+
+-- R-013: Content-aware classification
+
+rule ClassifyManagedFile {
+    when: SyncRequested(explicit: true, _, _, _)
+    for fs in PrimitiveFileState where fs.classification != missing:
+        ensures: if fs.content_hash = fs.expected_hash:
+            fs.classification = managed_unchanged
+        ensures: if fs.content_hash != fs.expected_hash and SettingsShim.marker_present:
+            fs.classification = managed_changed
+        ensures: if not SettingsShim.marker_present:
+            fs.classification = user_owned
+    @guidance
+        -- Classification must compare actual file content, not just existence.
+        -- missing: file does not exist on disk
+        -- managed_unchanged: file exists, has marker, content matches expected
+        -- managed_changed: file exists, has marker, content differs from expected
+        -- user_owned: file exists, no MYPI marker present
+        -- user_modified: file has marker but user added non-managed keys
+        -- invalid_json: file exists but cannot be parsed as JSON
+}
+
+rule DiffModeReportsPlannedChanges {
+    when: SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger)
+    ensures: SyncPlan.diff_requested = true
+    ensures: SyncPlan.would_create_count >= 0
+    ensures: SyncPlan.would_upgrade_count >= 0
+    ensures: SyncPlan.preserved_locally_modified_count >= 0
+    ensures: SyncPlan.classified_files.count > 0
+}
+
+rule UpgradePreservesLocalModifications {
+    when: SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger)
+    requires: SyncPlan.upgrade_target in {all, single}
+    for fs in PrimitiveFileState where fs.classification in {user_owned, user_modified}:
+        ensures: DriftDetected(reason: "preserved_locally_modified")
+}
+
+rule UpgradeModeClassifiesAllTouchedFiles {
+    when: SyncRequested(explicit: true, repair_shim: false, _, _)
+    for fs in PrimitiveFileState:
+        ensures: fs.classification in {missing, managed_unchanged, managed_changed, user_owned, user_modified, invalid_json}
+}
+
+invariant AdvisoryFollowsDriftSignal {
+    DesiredState.advisory_emitted implies DesiredState.hash_inputs_changed
+}
+
+invariant DiffCountersAreNonNegative {
+    SyncPlan.would_create_count >= 0 and SyncPlan.would_upgrade_count >= 0 and SyncPlan.preserved_locally_modified_count >= 0
+}
+
+invariant ContentAwareClassification {
+    -- R-013: Classification is based on content comparison, not mere existence
+    for fs in PrimitiveFileState where fs.classification = managed_unchanged:
+        fs.content_hash = fs.expected_hash
+}

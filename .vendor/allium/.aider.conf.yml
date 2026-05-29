@@ -1,1 +1,0 @@
-lint-cmd: "./hooks/allium-lint.sh"

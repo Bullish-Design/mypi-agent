@@ -1,50 +1,168 @@
 -- allium: 3
 
-rule AutoBootstrapOnShellEntry {
-    when: ShellEntered()
-    requires: not AgentRoot.exists or not AgentRoot.required_dirs_present or not SettingsShim.exists
-    ensures: SyncRequested(explicit: false, repair_shim: false)
+-- Core sync workflow specification.
+-- R-010: --diff must be read-only.
+-- R-011: Settings repair must merge, not overwrite.
+-- R-012: Sync must truthfully report overwrites.
+-- R-021: Shell bootstrap must not silently swallow failures.
+-- R-024: Use atomic writes.
+
+use "./core.allium" as core
+
+entity SettingsMergePolicy {
+    managed_keys: List<String>
+    marker_key: String
+    marker_schema_version: Integer
+    user_keys_preserved: Boolean
 }
 
+Given SettingsMergePolicy {
+    managed_keys: ["extensions", "skills", "prompts", "themes", "enableSkillCommands"]
+    marker_key: "x-mypi-agent"
+    marker_schema_version: 1
+}
+
+surface LocalSyncTriggers {
+    facing _: AgentRoot
+
+    provides:
+        ShellEntered()
+        DesiredStateChanged()
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: true, diff_requested: false, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
+}
+
+-- R-010: Diff mode builds plan but does not write
+
+rule SyncDiffMode {
+    when: SyncRequested(explicit, repair_shim, diff_requested: true, trigger)
+    ensures: SyncRun.diff_requested = true
+    ensures: not SyncRun.filesystem_mutated
+    ensures: SyncRun.completed = true
+    ensures: SyncRun.write_actions.count = 0
+    @guidance
+        -- Build a sync plan describing what would change.
+        -- Print or return the plan.
+        -- Exit without any filesystem writes.
+        -- Acceptance: hash the project tree before and after; they must match.
+}
+
+-- Bootstrap: create missing directories and initial files
+
 rule SyncBootstrap {
-    when: SyncRequested(explicit, repair_shim)
+    when: SyncRequested(explicit, repair_shim, diff_requested: false, trigger)
     requires: not AgentRoot.exists or not AgentRoot.required_dirs_present or not SettingsShim.exists
     ensures: AgentRoot.exists = true
     ensures: AgentRoot.required_dirs_present = true
     ensures: SettingsShim.exists = true
     ensures: SyncRun.bootstrap_performed = true
+    @guidance
+        -- Create .agents/pi directory tree.
+        -- Create initial .pi/settings.json with managed keys and marker.
+        -- Record each write as a WriteAction for truthful reporting.
 }
 
+-- Manifest heal: repair or create manifest when invalid
+
 rule SyncManifestHeal {
-    when: SyncRequested(_, _)
-    requires: not InstalledManifest.exists or not InstalledManifest.valid_json
+    when: SyncRequested(_, _, diff_requested: false, _)
+    requires: not InstalledManifest.exists or not InstalledManifest.valid_json or not InstalledManifest.schema_valid
     ensures: InstalledManifest.exists = true
     ensures: InstalledManifest.valid_json = true
+    ensures: InstalledManifest.schema_valid = true
     ensures: SyncRun.manifest_healed = true
 }
 
-rule SyncShimUpdate {
-    when: SyncRequested(explicit: true, repair_shim: false)
-    requires: not SettingsShim.locally_modified
+-- R-011: Settings shim update merges managed keys, preserves user keys
+
+rule SyncShimMerge {
+    when: SyncRequested(explicit: true, repair_shim: true, diff_requested: false, trigger)
     ensures: SettingsShim.points_to_configured_root = true
+    ensures: SettingsShim.marker_present = true
+    ensures: SettingsMergePolicy.user_keys_preserved = true
     ensures: SyncRun.shim_updated = true
+    @guidance
+        -- Read existing .pi/settings.json if present.
+        -- Identify MYPI-managed keys from the marker's managedKeys list.
+        -- Update only managed keys with MYPI-generated values.
+        -- Preserve all other keys as user-owned.
+        -- Write the x-mypi-agent marker with:
+        --   managed: true
+        --   schemaVersion: 1
+        --   agentRoot: relative path to .agents/pi
+        --   managedKeys: list of managed key names
+        -- Use atomic write (write to temp file, fsync, rename).
 }
 
+-- Pi installation via npm
+
+rule SyncInstallPi {
+    when: SyncRequested(explicit: true, _, diff_requested: false, _)
+    requires: not PiExecutable.installed
+    requires: NodeRuntime.node_available and NodeRuntime.npm_available
+    ensures: PiExecutable.installed = true
+    ensures: PiExecutable.path_exists = true
+    ensures: PiExecutable.is_executable = true
+    @guidance
+        -- Install Pi via npm with pinned version:
+        -- npm install --prefix "$MYPI_AGENT_ROOT" \
+        --   --ignore-scripts --no-audit --no-fund \
+        --   "@earendil-works/pi-coding-agent@<pinned-version>"
+        -- Use repo-scoped npm configuration (NPM_CONFIG_PREFIX, NPM_CONFIG_CACHE).
+}
+
+-- R-012: Finalize with truthful overwrite reporting
+
 rule SyncFinalize {
-    when: SyncRequested(explicit, repair_shim)
+    when: SyncRequested(explicit, repair_shim, diff_requested: false, trigger)
     ensures: SyncRun.explicit = explicit
     ensures: SyncRun.repair_shim = repair_shim
-    ensures: SyncRun.existing_files_overwritten = false
+    ensures: SyncRun.trigger = trigger
+    ensures: SyncRun.existing_files_overwritten =
+        SyncRun.write_actions.any(a => a.existed_before and a.content_changed)
     ensures: SyncRun.completed = true
     ensures: SyncCompleted()
 }
 
+-- R-021: Shell-triggered sync records trigger and surfaces errors
+
+rule ShellBootstrapSync {
+    when: ShellEntered()
+    requires: NeedsSyncResult.sync_needed
+    ensures: SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
+    @guidance
+        -- In the Nix enterShell hook:
+        -- if mypi needs-sync --trigger shell; then
+        --   if ! mypi sync --trigger shell; then
+        --     echo "warning: mypi bootstrap failed; run: mypi doctor" >&2
+        --   fi
+        -- fi
+        -- Errors are visible. Normal no-op shell entry is quiet.
+}
+
 rule ManualUpgradePosture {
     when: DesiredStateChanged()
-    ensures: SyncRun.advisory_shown = true
     ensures: SyncRun.upgrade_requires_explicit_sync = true
+}
+
+-- R-024: Atomic writes
+
+invariant AtomicWritePolicy {
+    for action in SyncRun.write_actions where action.managed:
+        AtomicWriteUsed(action.path)
+    @guidance
+        -- Write to temporary file in same directory.
+        -- fsync if appropriate.
+        -- Rename into place.
 }
 
 invariant NoOverwriteByDefault {
     not SyncRun.existing_files_overwritten
+}
+
+invariant SettingsMergePreservesUserKeys {
+    -- R-011: user-owned keys are never deleted or modified by sync
+    SyncRun.shim_updated implies SettingsMergePolicy.user_keys_preserved
 }

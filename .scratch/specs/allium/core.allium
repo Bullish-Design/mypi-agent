@@ -1,36 +1,67 @@
 -- allium: 3
 
-entity SettingsShim {
-    exists: Boolean
-    locally_modified: Boolean
-    points_to_configured_root: Boolean
-}
+-- Core entities, infrastructure guarantees, and safety invariants
+-- for the mypi-agent bootstrap foundation.
 
 entity AgentRoot {
     exists: Boolean
     required_dirs_present: Boolean
+    path: String
 }
 
 entity InstalledManifest {
     exists: Boolean
     valid_json: Boolean
+    schema_valid: Boolean
+}
+
+entity NodeRuntime {
+    node_available: Boolean
+    npm_available: Boolean
+    npx_available: Boolean
+    node_version: String when node_available
+    npm_version: String when npm_available
+}
+
+entity PiExecutable {
+    installed: Boolean
+    path_exists: Boolean
+    is_executable: Boolean
+    version_check_passed: Boolean
+    installed_version: String when installed
+}
+
+entity NpmScope {
+    prefix_is_project_local: Boolean
+    cache_is_project_local: Boolean
+    audit_disabled: Boolean
+    fund_disabled: Boolean
+}
+
+entity WriteAction {
+    path: String
+    existed_before: Boolean
+    content_changed: Boolean
+    managed: Boolean
 }
 
 entity SyncRun {
     explicit: Boolean
     repair_shim: Boolean
+    diff_requested: Boolean
+    trigger: shell | manual | needs_sync_check
     completed: Boolean
     existing_files_overwritten: Boolean
-    advisory_shown: Boolean
     upgrade_requires_explicit_sync: Boolean
     bootstrap_performed: Boolean
     manifest_healed: Boolean
     shim_updated: Boolean
+    advisory_shown: Boolean
+    write_actions: List<WriteAction>
+    filesystem_mutated: Boolean when diff_requested
 }
 
 entity SecretRuntimePolicy {
-    runtime_env_load_attempted: Boolean
-    runtime_env_load_completed: Boolean
     missing_env_files_warning: Boolean
     secrets_written_to_generated_config: Boolean
     secrets_available_at_evaluation_time: Boolean
@@ -39,13 +70,7 @@ entity SecretRuntimePolicy {
     warning_reason_missing_env_files_only: Boolean
 }
 
-entity DoctorRun {
-    requested: Boolean
-    checks_completed: Boolean
-    error_count: Integer
-    computed_error_count: Integer
-    exit_code: Integer
-}
+-- Safety invariants
 
 invariant RequiredFilesEventuallyMaterialized {
     AgentRoot.exists implies AgentRoot.required_dirs_present
@@ -55,12 +80,34 @@ invariant SyncNonDestructive {
     not SyncRun.existing_files_overwritten
 }
 
+invariant TruthfulOverwriteReporting {
+    -- R-012: existing_files_overwritten must reflect actual write actions
+    SyncRun.completed implies
+        SyncRun.existing_files_overwritten =
+            SyncRun.write_actions.any(a => a.existed_before and a.content_changed)
+}
+
+invariant DiffModeIsReadOnly {
+    -- R-010: diff mode must never mutate the filesystem
+    SyncRun.diff_requested implies not SyncRun.filesystem_mutated
+}
+
 invariant ExplicitOnlyUpgrades {
     SyncRun.upgrade_requires_explicit_sync
 }
 
 invariant ManifestValidityAfterSync {
-    SyncRun.completed implies InstalledManifest.valid_json
+    SyncRun.completed implies InstalledManifest.valid_json and InstalledManifest.schema_valid
+}
+
+invariant NodeRuntimeAvailableWhenEnabled {
+    -- R-004: module must provide npm-capable runtime
+    NodeRuntime.node_available and NodeRuntime.npm_available
+}
+
+invariant NpmScopeIsProjectLocal {
+    -- R-006: npm state must be repo-scoped
+    NpmScope.prefix_is_project_local and NpmScope.cache_is_project_local
 }
 
 invariant NoSecretPersistence {

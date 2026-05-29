@@ -1,0 +1,217 @@
+-- allium: 3
+
+-- Test fixture matrix specification.
+-- R-025: YAML import-only consumer fixture.
+-- R-026: Tmp repo fixture test.
+-- R-027: Skip devenv tests when unavailable.
+-- R-028: No-network/sandboxed sync tests.
+-- R-029: --diff no-mutation test.
+-- R-030: Custom-root settings actor test.
+-- R-031: Doctor failure tests for missing Pi executable.
+-- R-032: Subdirectory invocation tests.
+
+use "./core.allium" as core
+
+entity FixtureProject {
+    name: String
+    scenario: yaml_import_only | custom_root | preserve_local_edits | tmp_repo | subdirectory_invocation
+    has_devenv_yaml_input: Boolean
+    imports_module_from_consumer_devenv_nix: Boolean
+    temp_workspace_used: Boolean
+}
+
+entity FixtureRun {
+    fixture_name: String
+    passed: Boolean
+}
+
+-- Test environment capabilities
+
+entity TestEnvironment {
+    devenv_available: Boolean
+    npm_available: Boolean
+    network_available: Boolean
+}
+
+-- R-027: Skip guard for devenv availability
+
+entity DevenvSkipGuard {
+    checked: Boolean
+    skipped: Boolean
+}
+
+-- Unit test scenarios (no devenv required)
+
+entity UnitTestScenario {
+    name: String
+    category: sync_sandboxed | diff_no_mutation | custom_root | doctor_failure | subdirectory
+    passed: Boolean
+}
+
+surface LocalTestingTriggers {
+    facing _: FixtureProject
+
+    provides:
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
+        TestSuiteRequested()
+}
+
+-- R-025: YAML import-only fixture
+
+rule YamlImportOnlyFixtureExists {
+    when: TestSuiteRequested()
+    ensures: exists FixtureProject where
+        name = "yaml-import-only"
+        and scenario = yaml_import_only
+        and has_devenv_yaml_input = true
+        and imports_module_from_consumer_devenv_nix = true
+    @guidance
+        -- Fixture layout:
+        -- tests/fixtures/devenv/yaml-import-only/devenv.yaml
+        -- tests/fixtures/devenv/yaml-import-only/devenv.nix
+        --
+        -- devenv.yaml imports mypi-agent with path:__REPO_ROOT__
+        -- devenv.nix runs: command -v mypi, command -v node, command -v npm,
+        -- mypi paths --json, mypi sync --trigger shell, mypi doctor
+}
+
+-- R-026: Tmp repo fixture test
+
+rule TmpRepoFixtureExists {
+    when: TestSuiteRequested()
+    ensures: exists FixtureProject where
+        name = "tmp-repo"
+        and scenario = tmp_repo
+        and temp_workspace_used = true
+    @guidance
+        -- Create a fresh temporary repository at test time.
+        -- Write minimal devenv.yaml importing local mypi-agent checkout.
+        -- Assert: command -v mypi, command -v node, command -v npm,
+        -- mypi sync --trigger shell, mypi doctor, mypi agent --version || true
+}
+
+-- Fixture run validation
+
+rule RunFixtureMatrixInTempWorkspace {
+    when: TestSuiteRequested()
+    requires: TestEnvironment.devenv_available
+    for fixture in FixtureProject:
+        ensures: FixtureRun.created(
+            fixture_name: fixture.name,
+            passed: fixture.has_devenv_yaml_input and fixture.imports_module_from_consumer_devenv_nix and fixture.temp_workspace_used
+        )
+}
+
+-- R-027: Skip when devenv unavailable
+
+rule SkipDevenvTestsWhenUnavailable {
+    when: TestSuiteRequested()
+    requires: not TestEnvironment.devenv_available
+    ensures: DevenvSkipGuard.checked = true
+    ensures: DevenvSkipGuard.skipped = true
+    @guidance
+        -- if shutil.which("devenv") is None:
+        --     pytest.skip("devenv is not installed")
+}
+
+-- R-028: No-network sync tests (unit level, no devenv required)
+
+rule SandboxedSyncTests {
+    when: TestSuiteRequested()
+    ensures: exists UnitTestScenario where name = "npm_absent" and category = sync_sandboxed
+    ensures: exists UnitTestScenario where name = "fake_npm_success" and category = sync_sandboxed
+    ensures: exists UnitTestScenario where name = "fake_npm_failure" and category = sync_sandboxed
+    ensures: exists UnitTestScenario where name = "pinned_package_arg_correct" and category = sync_sandboxed
+    @guidance
+        -- These tests mock npm to avoid network access.
+        -- npm absent: sync warns and skips Pi install.
+        -- fake npm success: sync completes with recorded version.
+        -- fake npm failure: sync reports error, doctor detects it.
+        -- pinned package arg: verify exact npm install arguments.
+}
+
+-- R-029: --diff no-mutation test
+
+rule DiffNoMutationTest {
+    when: TestSuiteRequested()
+    ensures: exists UnitTestScenario where name = "diff_no_mutation" and category = diff_no_mutation
+    @guidance
+        -- before = tree_hash(tmp_path)
+        -- result = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+        -- after = tree_hash(tmp_path)
+        -- assert before == after
+        -- assert result.diff_requested is True
+}
+
+-- R-030: Custom-root settings actor test
+
+rule CustomRootSettingsTest {
+    when: TestSuiteRequested()
+    ensures: exists UnitTestScenario where name = "custom_root_settings" and category = custom_root
+    ensures: exists FixtureProject where name = "custom-root" and scenario = custom_root
+    @guidance
+        -- Set MYPI_AGENT_ROOT=.agents/custom-pi
+        -- Generated settings should point to ../.agents/custom-pi
+        -- Runtime checks should report points_to_configured_root=True
+        -- This test should fail before the refactor (hardcoded ../.agents/pi)
+        -- and pass after (uses configured root).
+}
+
+-- R-031: Doctor failure tests for missing Pi
+
+rule DoctorFailureTests {
+    when: TestSuiteRequested()
+    ensures: exists UnitTestScenario where name = "doctor_missing_pi_executable" and category = doctor_failure
+    ensures: exists UnitTestScenario where name = "doctor_pi_not_executable" and category = doctor_failure
+    ensures: exists UnitTestScenario where name = "doctor_missing_npm" and category = doctor_failure
+    ensures: exists UnitTestScenario where name = "doctor_missing_node" and category = doctor_failure
+    @guidance
+        -- Settings and manifest exist, but Pi executable missing: doctor fails.
+        -- Pi executable exists but not executable: doctor fails.
+        -- npm absent while runtime npm install enabled: doctor fails.
+        -- node absent while runtime npm install enabled: doctor fails.
+}
+
+-- R-032: Subdirectory invocation tests
+
+rule SubdirectoryInvocationTests {
+    when: TestSuiteRequested()
+    ensures: exists UnitTestScenario where name = "subdirectory_paths" and category = subdirectory
+    ensures: exists UnitTestScenario where name = "subdirectory_sync" and category = subdirectory
+    @guidance
+        -- From repo/packages/example/src:
+        -- mypi paths --json -> project_root is devenv repo root, not cwd
+        -- mypi sync -> operates on repo root, not cwd
+}
+
+-- Coverage invariants
+
+invariant FixtureCoverageForImportBehavior {
+    exists FixtureProject where scenario = yaml_import_only
+    and exists FixtureProject where scenario = custom_root
+    and exists FixtureProject where scenario = preserve_local_edits
+    and exists FixtureProject where scenario = tmp_repo
+    and exists FixtureProject where scenario = subdirectory_invocation
+}
+
+invariant FixtureRunsPassOnlyWithCorrectImportPattern {
+    for run in FixtureRun where run.passed:
+        exists FixtureProject where name = run.fixture_name and has_devenv_yaml_input and imports_module_from_consumer_devenv_nix
+}
+
+invariant FixtureScenarioCoverageOnRuns {
+    for fixture in FixtureProject:
+        fixture.scenario in {yaml_import_only, custom_root, preserve_local_edits, tmp_repo, subdirectory_invocation}
+}
+
+invariant UnitTestCoverageComplete {
+    exists UnitTestScenario where category = sync_sandboxed
+    and exists UnitTestScenario where category = diff_no_mutation
+    and exists UnitTestScenario where category = custom_root
+    and exists UnitTestScenario where category = doctor_failure
+    and exists UnitTestScenario where category = subdirectory
+}
+
+invariant DevenvTestsSkippedWhenUnavailable {
+    not TestEnvironment.devenv_available implies DevenvSkipGuard.skipped
+}
