@@ -4,12 +4,16 @@ let
   mypiPkg = pkgs.callPackage ../packages/mypi-agent-cli.nix { };
   mypiBin = pkgs.writeShellScriptBin "mypi" ''
     set -euo pipefail
+    if [ -n "''${DEVENV_ROOT:-}" ]; then
+      cd "$DEVENV_ROOT"
+    fi
     export MYPI_AGENT_ROOT="${cfg.root}"
     exec ${mypiPkg}/bin/mypi "$@"
   '';
   piAgentBin = pkgs.writeShellScriptBin "pi-agent" ''
     set -euo pipefail
-    launcher="${cfg.root}/bin/pi-agent"
+    project_root="''${DEVENV_ROOT:-$PWD}"
+    launcher="$project_root/${cfg.root}/bin/pi-agent"
     if [ ! -x "$launcher" ]; then
       echo "pi-agent is not installed yet; run: mypi sync" >&2
       exit 1
@@ -18,7 +22,8 @@ let
   '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
-    if [ ! -f .pi/settings.json ] || [ "${cfg.bootstrap.mode}" = "every_entry" ]; then
+    project_root="''${DEVENV_ROOT:-$PWD}"
+    if [ ! -f "$project_root/.pi/settings.json" ] || [ "${cfg.bootstrap.mode}" = "every_entry" ]; then
       mypi sync >/dev/null 2>&1 || true
     fi
   '';
@@ -39,6 +44,12 @@ in
       description = "Project-relative root for MYPI agent artifacts.";
     };
 
+    nodePackage = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.nodejs_22;
+      description = "Node.js package for Pi/npm installation and operations.";
+    };
+
     bootstrap.mode = lib.mkOption {
       type = lib.types.enum [ "first_entry_only" "manual_only" "every_entry" ];
       default = "first_entry_only";
@@ -47,7 +58,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    packages = [ mypiPkg mypiBin piAgentBin ];
+    packages = [ mypiPkg mypiBin piAgentBin cfg.nodePackage ];
 
     enterShell = lib.mkAfter ''
       ${bootstrapCmd}
