@@ -1,18 +1,18 @@
-{ lib, python3Packages }:
+{ lib, python313Packages }:
 
-python3Packages.buildPythonApplication {
+python313Packages.buildPythonApplication {
   pname = "mypi-agent";
   version = "0.1.0";
   src = ../.;
   pyproject = true;
 
   build-system = [
-    python3Packages.hatchling
+    python313Packages.hatchling
   ];
 
   dependencies = [
-    python3Packages.pydantic
-    python3Packages.typer
+    python313Packages.pydantic
+    python313Packages.typer
   ];
 
   pythonImportsCheck = [ "mypi_agent" ];
