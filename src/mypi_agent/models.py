@@ -2,8 +2,20 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from .base_model import AlliumBase
+
+RESOURCE_LITERALS = Literal["extensions", "skills", "prompts", "themes"]
+
+
+class Manifest(AlliumBase):
+    schema_version: Literal[1]
+    resources: list[RESOURCE_LITERALS]
+    pi_package: str
+    pi_version: str | None = None
+    node_version: str | None = None
+    generated_by: str = "mypi-agent"
 
 
 class Paths(AlliumBase):

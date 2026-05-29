@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from pydantic import ValidationError
 
 from .base_model import AlliumBase
-from .models import Paths
+from .models import Manifest, Paths
 
 
 class DoctorResult(AlliumBase):
@@ -23,20 +24,11 @@ def _manifest_valid(paths: Paths) -> bool:
         payload = json.loads(paths.manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return False
-    if not isinstance(payload, dict):
+    try:
+        Manifest.model_validate(payload)
+    except ValidationError:
         return False
-    required = ("schema_version", "resources", "pi_package", "pi_version", "node_version", "generated_by")
-    if any(key not in payload for key in required):
-        return False
-    if payload.get("schema_version") != 1:
-        return False
-    if payload.get("generated_by") != "mypi-agent":
-        return False
-    resources = payload.get("resources")
-    if not isinstance(resources, list):
-        return False
-    allowed_resources = {"extensions", "skills", "prompts", "themes"}
-    return all(isinstance(item, str) and item in allowed_resources for item in resources)
+    return True
 
 
 def _secret_leak_likely(paths: Paths) -> bool:

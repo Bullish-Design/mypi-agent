@@ -10,6 +10,7 @@ import typer
 from .doctor import run_doctor
 from .models import Paths
 from .sync import run_sync
+from .sync import needs_sync
 from .surfaces_runtime import build_settings_shim_actor, require_settings_shim_actor
 
 app = typer.Typer(help="MYPI-AGENT CLI")
@@ -93,6 +94,18 @@ def paths_command(json_output: bool = typer.Option(False, "--json")) -> None:
         return
     for key, value in payload.items():
         typer.echo(f"{key}={value}")
+
+
+@app.command("needs-sync")
+def needs_sync_command(
+    trigger: str = typer.Option("manual", "--trigger"),
+) -> None:
+    if trigger not in {"manual", "shell"}:
+        raise typer.BadParameter("--trigger must be one of: manual, shell")
+    paths = Paths(project_root=Path.cwd())
+    if needs_sync(paths):
+        raise typer.Exit(code=0)
+    raise typer.Exit(code=1)
 
 
 def main() -> None:
