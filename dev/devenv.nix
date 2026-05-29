@@ -21,10 +21,10 @@
   '';
 
   allium.enable = true;
-  allium.specsDir = ".scratch/specs";
+  allium.specsDir = "../.scratch/specs";
   allium.codexSkills.enable = true;
   allium.codexSkills.autoInstall = true;
-  allium.codexSkills.targetDir = ".agents/skills";
+  allium.codexSkills.targetDir = "../.agents/skills";
 
   enterShell = ''
     echo

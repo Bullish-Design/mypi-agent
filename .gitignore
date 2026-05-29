@@ -13,7 +13,10 @@ uv.lock
 .devenv.flake.nix
 .vscode/**
 .vendor/**
-
+**/.devenv/**
+**/.agents/**
+**/.pi/**
+.pi/**
 
 
 # C extensions
