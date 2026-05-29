@@ -51,8 +51,13 @@ def test_cli_doctor_reports_errors_and_exit_code(tmp_path, monkeypatch):
 
 def test_cli_doctor_success_after_sync(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)
     assert sync_result.exit_code == 0
+    pi_executable = tmp_path / ".agents" / "pi" / "bin" / "pi-agent"
+    pi_executable.parent.mkdir(parents=True, exist_ok=True)
+    pi_executable.write_text("#!/bin/sh\necho 1.2.3\n", encoding="utf-8")
+    pi_executable.chmod(0o755)
 
     doctor_result = runner.invoke(app, ["doctor"], catch_exceptions=False)
     assert doctor_result.exit_code == 0
@@ -81,8 +86,13 @@ def test_cli_sync_diff_prints_counts(tmp_path, monkeypatch):
 
 def test_cli_doctor_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)
     assert sync_result.exit_code == 0
+    pi_executable = tmp_path / ".agents" / "pi" / "bin" / "pi-agent"
+    pi_executable.parent.mkdir(parents=True, exist_ok=True)
+    pi_executable.write_text("#!/bin/sh\necho 1.2.3\n", encoding="utf-8")
+    pi_executable.chmod(0o755)
     doctor_result = runner.invoke(app, ["doctor", "--json"], catch_exceptions=False)
     assert doctor_result.exit_code == 0
     assert '"error_count": 0' in doctor_result.stdout
@@ -109,3 +119,32 @@ def test_cli_paths_json_outputs_required_fields(tmp_path, monkeypatch):
     assert payload["agent_root"] == str(tmp_path / ".agents" / "pi")
     assert payload["manifest_path"] == str(tmp_path / ".agents" / "pi" / "manifest.json")
     assert payload["pi_executable_path"] == str(tmp_path / ".agents" / "pi" / "bin" / "pi-agent")
+
+
+def test_cli_rejects_unmanaged_directory_without_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MYPI_ALLOW_UNMANAGED", raising=False)
+    result = runner.invoke(app, ["paths"], catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "error: mypi must be run inside a devenv-managed project" in result.stdout
+
+
+def test_cli_sync_allow_unmanaged_flag(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MYPI_ALLOW_UNMANAGED", raising=False)
+    result = runner.invoke(app, ["sync", "--allow-unmanaged"], catch_exceptions=False)
+    assert result.exit_code == 0
+
+
+def test_cli_discovers_project_root_from_subdirectory(tmp_path, monkeypatch):
+    project_root = tmp_path / "proj"
+    project_root.mkdir(parents=True)
+    (project_root / "devenv.yaml").write_text("inputs: {}\nimports: []\n", encoding="utf-8")
+    nested = project_root / "a" / "b"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    monkeypatch.delenv("MYPI_ALLOW_UNMANAGED", raising=False)
+    result = runner.invoke(app, ["paths", "--json"], catch_exceptions=False)
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["project_root"] == str(project_root)

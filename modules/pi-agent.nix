@@ -7,6 +7,8 @@ let
   mypiBin = pkgs.writeShellScriptBin "mypi" ''
     set -euo pipefail
     root_rel=${cfgRootEscaped}
+    project_root="''${DEVENV_ROOT:-$PWD}"
+    export MYPI_PROJECT_ROOT="$project_root"
     if [ -n "''${DEVENV_ROOT:-}" ]; then
       cd "$DEVENV_ROOT"
     fi
@@ -39,9 +41,10 @@ let
   '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
-    project_root="''${DEVENV_ROOT:-$PWD}"
-    if [ ! -f "$project_root/.pi/settings.json" ] || [ ${cfgBootstrapModeEscaped} = "every_entry" ]; then
-      mypi sync >/dev/null 2>&1 || true
+    if [ ${cfgBootstrapModeEscaped} = "every_entry" ] || mypi needs-sync --trigger shell; then
+      if ! mypi sync --trigger shell; then
+        echo "warning: mypi bootstrap failed; run: mypi doctor" >&2
+      fi
     fi
   '';
 in
@@ -79,6 +82,12 @@ in
       description = "Additional flags passed to npm install for Pi package installation.";
     };
 
+    exposePiAgentShim = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Expose a compatibility pi-agent command.";
+    };
+
     bootstrap.mode = lib.mkOption {
       type = lib.types.enum [ "first_entry_only" "manual_only" "every_entry" ];
       default = "first_entry_only";
@@ -87,7 +96,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    packages = [ mypiPkg mypiBin piAgentBin cfg.nodePackage ];
+    packages = [ mypiPkg mypiBin cfg.nodePackage ] ++ lib.optional cfg.exposePiAgentShim piAgentBin;
 
     enterShell = lib.mkAfter ''
       ${npmEnvCmd}

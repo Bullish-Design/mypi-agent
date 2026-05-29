@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from pathlib import Path
 
 import typer
 
@@ -15,16 +14,25 @@ from .surfaces_runtime import build_settings_shim_actor, require_settings_shim_a
 
 app = typer.Typer(help="MYPI-AGENT CLI")
 
+
+def _resolve_paths(allow_unmanaged: bool = False) -> Paths:
+    try:
+        return Paths.discover(allow_unmanaged=allow_unmanaged)
+    except RuntimeError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
 @app.command("sync")
 def sync_command(
     trigger: str = typer.Option("manual", "--trigger"),
     repair_shim: bool = typer.Option(False, "--repair-shim"),
     diff_mode: bool = typer.Option(False, "--diff"),
     json_output: bool = typer.Option(False, "--json"),
+    allow_unmanaged: bool = typer.Option(False, "--allow-unmanaged"),
 ) -> None:
     if trigger not in {"manual", "shell"}:
         raise typer.BadParameter("--trigger must be one of: manual, shell")
-    paths = Paths(project_root=Path.cwd())
+    paths = _resolve_paths(allow_unmanaged=allow_unmanaged)
     require_settings_shim_actor("SyncCommandSurface", build_settings_shim_actor(paths))
     result = run_sync(
         paths,
@@ -54,7 +62,7 @@ def sync_command(
 
 @app.command("doctor")
 def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
-    paths = Paths(project_root=Path.cwd())
+    paths = _resolve_paths()
     require_settings_shim_actor("DoctorCommandSurface", build_settings_shim_actor(paths))
     result = run_doctor(paths)
     if json_output:
@@ -67,7 +75,7 @@ def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
 
 @app.command("agent")
 def agent_command(args: list[str] = typer.Argument(None)) -> None:
-    paths = Paths(project_root=Path.cwd())
+    paths = _resolve_paths()
     require_settings_shim_actor("AgentCommandSurface", build_settings_shim_actor(paths))
     pi_executable = paths.pi_executable_path
     if not pi_executable.exists() or not os.access(pi_executable, os.X_OK):
@@ -87,7 +95,7 @@ def pi_command(args: list[str] = typer.Argument(None)) -> None:
 
 @app.command("paths")
 def paths_command(json_output: bool = typer.Option(False, "--json")) -> None:
-    paths = Paths(project_root=Path.cwd())
+    paths = _resolve_paths()
     payload = paths.as_mapping()
     if json_output:
         typer.echo(json.dumps(payload, indent=2))
@@ -99,10 +107,11 @@ def paths_command(json_output: bool = typer.Option(False, "--json")) -> None:
 @app.command("needs-sync")
 def needs_sync_command(
     trigger: str = typer.Option("manual", "--trigger"),
+    allow_unmanaged: bool = typer.Option(False, "--allow-unmanaged"),
 ) -> None:
     if trigger not in {"manual", "shell"}:
         raise typer.BadParameter("--trigger must be one of: manual, shell")
-    paths = Paths(project_root=Path.cwd())
+    paths = _resolve_paths(allow_unmanaged=allow_unmanaged)
     if needs_sync(paths):
         raise typer.Exit(code=0)
     raise typer.Exit(code=1)

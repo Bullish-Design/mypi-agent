@@ -21,6 +21,22 @@ class Manifest(AlliumBase):
 class Paths(AlliumBase):
     project_root: Path
 
+    @classmethod
+    def discover(cls, allow_unmanaged: bool = False) -> "Paths":
+        env_root = os.environ.get("MYPI_PROJECT_ROOT")
+        if env_root:
+            return cls(project_root=Path(env_root).resolve())
+
+        cursor = Path.cwd().resolve()
+        for candidate in [cursor, *cursor.parents]:
+            if (candidate / "devenv.nix").exists() or (candidate / "devenv.yaml").exists():
+                return cls(project_root=candidate)
+
+        allow_env = os.environ.get("MYPI_ALLOW_UNMANAGED", "").strip().lower() in {"1", "true", "yes"}
+        if allow_unmanaged or allow_env:
+            return cls(project_root=cursor)
+        raise RuntimeError("error: mypi must be run inside a devenv-managed project")
+
     @property
     def pi_dir(self) -> Path:
         return self.project_root / ".pi"
