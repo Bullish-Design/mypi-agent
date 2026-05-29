@@ -1,40 +1,56 @@
 # AGENTS
 
-## Allium Spec Location
+## Project contract
 
-All `.allium` files are located under:
+This repository provides a repo-scoped MYPI/Pi bootstrap module for devenv/Nix consumers.
 
-- `.scratch/specs`
+The public import surface must stay minimal and free of development-only dependencies.
 
-Do not place `.allium` files outside this directory.
-Specs may be nested in any subdirectory under `.scratch/specs`.
-Always recursively search all directories under `.scratch/specs` for `.allium` files.
+## Public vs development environment
 
-## Running Commands
+- Public consumer surface: root `devenv.nix` + `modules/pi-agent.nix`
+- Development-only environment: `dev/` (including `allium-env`)
 
-All project commands must be run inside the devenv shell. Use the agent bootstrap script to run commands:
+Do not re-introduce `allium-env` or other development-only wiring into the public root import path.
+
+## Runtime command surface
+
+Use `mypi` as the runtime control plane:
+
+- `mypi sync`
+- `mypi doctor`
+- `mypi agent` / `mypi pi`
+- `mypi needs-sync`
+- `mypi paths`
+
+## Test contract
+
+Nix/devenv fixtures under `tests/fixtures/devenv/` are contract tests for consumer integration and module behavior.
+
+Treat fixture behavior changes as API/contract changes, not local implementation details.
+
+## Generated file policy
+
+Commit:
+
+- `.pi/settings.json`
+
+Optional to commit:
+
+- `.agents/pi/manifest.json`
+
+Ignore runtime/install artifacts:
+
+- `.agents/pi/node_modules/`
+- `.agents/pi/.npm-cache/`
+- `.agents/pi/bin/`
+- `.agents/pi/.state/`
+- `.agents/pi/npm-global/`
+
+## Running repository commands
+
+Run project commands inside devenv via:
 
 ```bash
 ./agent-devboot.sh <command>
-```
-
-Examples:
-
-```bash
-./agent-devboot.sh mypi sync
-./agent-devboot.sh mypi doctor
-./agent-devboot.sh pytest
-./agent-devboot.sh allium --help
-```
-
-Do not run `mypi`, `allium-cli`, `pytest`, or other project tools directly — they are only available inside the devenv shell.
-
-## Allium CLI Availability
-
-`allium-cli` is available inside the devenv shell.
-
-For validation, run `allium-cli` commands via:
-
-```bash
-./agent-devboot.sh allium --help
 ```
