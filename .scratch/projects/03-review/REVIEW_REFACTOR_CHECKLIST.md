@@ -15,7 +15,7 @@ This is the foundational change. Everything else depends on the root import surf
 **Spec**: `module.allium` — `PublicImportSurface`, `AlliumNotInPublicSurface`
 **Requirement**: R-001
 
-- [ ] Replace contents of `devenv.nix` with:
+- [x] Replace contents of `devenv.nix` with:
   ```nix
   { lib, ... }:
   {
@@ -23,15 +23,15 @@ This is the foundational change. Everything else depends on the root import surf
     piAgent.enable = lib.mkDefault true;
   }
   ```
-- [ ] Verify the file contains no `allium.*` options, no `languages.python`, no `pkgs.uv`, no `pkgs.git`, no `scripts`, no `enterShell` hooks beyond what the module provides.
+- [x] Verify the file contains no `allium.*` options, no `languages.python`, no `pkgs.uv`, no `pkgs.git`, no `scripts`, no `enterShell` hooks beyond what the module provides.
 
 ### 1.2 Replace root `devenv.yaml` with public-only inputs
 
 **Spec**: `module.allium` — `ConsumerDoesNotRequireAllium`
 **Requirement**: R-001, R-003
 
-- [ ] Remove `allium-env` input from root `devenv.yaml`.
-- [ ] Remove `allium-env` from `imports:` list.
+- [x] Remove `allium-env` input from root `devenv.yaml`.
+- [x] Remove `allium-env` from `imports:` list.
 - [ ] Keep only `nixpkgs` (and `nixpkgs-python` if needed by the module). The root `devenv.yaml` should contain the minimum inputs a consumer would need, or be empty of imports entirely.
 
 ### 1.3 Move development environment to `dev/`
@@ -39,19 +39,19 @@ This is the foundational change. Everything else depends on the root import surf
 **Spec**: `module.allium` — `PrivateDevelopmentEnv`, `PrivateDevEnvIsIsolated`
 **Requirement**: R-002
 
-- [ ] Create `dev/devenv.nix` containing the current development shell: Python 3.13, uv, git, allium config, test scripts, enterShell hooks.
-- [ ] Create `dev/devenv.yaml` with `allium-env` input and import, plus `nixpkgs` inputs.
-- [ ] Ensure `dev/devenv.yaml` can reference the parent repo's module if needed for local testing (e.g., `imports: - ../` or a path input).
-- [ ] Update any local development workflow docs/scripts to use `devenv shell --config dev/devenv.nix` or `cd dev && devenv shell`.
-- [ ] Verify `.agents/skills/` allium skill symlinks still work from the dev environment.
+- [x] Create `dev/devenv.nix` containing the current development shell: Python 3.13, uv, git, allium config, test scripts, enterShell hooks.
+- [x] Create `dev/devenv.yaml` with `allium-env` input and import, plus `nixpkgs` inputs.
+- [x] Ensure `dev/devenv.yaml` can reference the parent repo's module if needed for local testing (e.g., `imports: - ../` or a path input).
+- [x] Update any local development workflow docs/scripts to use `devenv shell --config dev/devenv.nix` or `cd dev && devenv shell`.
+- [x] Verify `.agents/skills/` allium skill symlinks still work from the dev environment.
 
 ### 1.4 Verify consumer isolation
 
 **Requirement**: R-003 acceptance criteria
 
-- [ ] Confirm that a clean consumer fixture using only `imports: - mypi-agent` evaluates without `allium-env` in its `devenv.yaml`.
-- [ ] Confirm the public root `devenv.nix` does not reference `allium` options.
-- [ ] Confirm removing allium-related files from a consumer fixture does not affect MYPI functionality.
+- [x] Confirm that a clean consumer fixture using only `imports: - mypi-agent` evaluates without `allium-env` in its `devenv.yaml`.
+- [x] Confirm the public root `devenv.nix` does not reference `allium` options.
+- [x] Confirm removing allium-related files from a consumer fixture does not affect MYPI functionality.
 
 ---
 
