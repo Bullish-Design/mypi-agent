@@ -32,7 +32,7 @@ This is the foundational change. Everything else depends on the root import surf
 
 - [x] Remove `allium-env` input from root `devenv.yaml`.
 - [x] Remove `allium-env` from `imports:` list.
-- [ ] Keep only `nixpkgs` (and `nixpkgs-python` if needed by the module). The root `devenv.yaml` should contain the minimum inputs a consumer would need, or be empty of imports entirely.
+- [x] Keep only `nixpkgs` (and `nixpkgs-python` if needed by the module). The root `devenv.yaml` should contain the minimum inputs a consumer would need, or be empty of imports entirely.
 
 ### 1.3 Move development environment to `dev/`
 
@@ -64,7 +64,7 @@ This is the foundational change. Everything else depends on the root import surf
 **Spec**: `options.allium` — `ModuleOptions.node_package`, `ModuleProvidesNodeRuntime`
 **Requirement**: R-004
 
-- [ ] Add option:
+- [x] Add option:
   ```nix
   piAgent.nodePackage = lib.mkOption {
     type = lib.types.package;
@@ -72,15 +72,15 @@ This is the foundational change. Everything else depends on the root import surf
     description = "Node.js package for Pi/npm installation and operations.";
   };
   ```
-- [ ] Add `cfg.nodePackage` to the `config.packages` list in the module.
-- [ ] Verify the consumer shell has `node`, `npm`, and `npx` on PATH.
+- [x] Add `cfg.nodePackage` to the `config.packages` list in the module.
+- [x] Verify the consumer shell has `node`, `npm`, and `npx` on PATH.
 
 ### 2.2 Add repo-scoped npm configuration
 
 **Spec**: `options.allium` — `ShellEnvironment`, `ModuleConfiguresNpmScope`
 **Requirement**: R-006
 
-- [ ] Set environment variables in the module's `enterShell` or `env`:
+- [x] Set environment variables in the module's `enterShell` or `env`:
   ```nix
   MYPI_PROJECT_ROOT = "\${PWD}";  # or use a more robust project root
   NPM_CONFIG_PREFIX = "\${MYPI_PROJECT_ROOT}/${lib.escapeShellArg cfg.root}/npm-global";
@@ -88,29 +88,29 @@ This is the foundational change. Everything else depends on the root import surf
   NPM_CONFIG_AUDIT = "false";
   NPM_CONFIG_FUND = "false";
   ```
-- [ ] Verify npm state goes under `.agents/pi/` and does not pollute `~/.npm` or global state.
+- [x] Verify npm state goes under `.agents/pi/` and does not pollute `~/.npm` or global state.
 
 ### 2.3 Remove the `piAgent.sourceRoot` option
 
 **Spec**: `options.allium` — open question on R-018
 **Requirement**: R-018
 
-- [ ] Remove `sourceRoot` from `modules/pi-agent.nix` (it is declared but unused).
-- [ ] Remove any references to `cfg.sourceRoot` in the module.
+- [x] Remove `sourceRoot` from `modules/pi-agent.nix` (it is declared but unused).
+- [x] Remove any references to `cfg.sourceRoot` in the module.
 
 ### 2.4 Fix shell quoting in the module
 
 **Spec**: `options.allium` — `ShellQuotingIsRobust`
 **Requirement**: R-019
 
-- [ ] Replace all bare `${cfg.root}` interpolations in shell script strings with `${lib.escapeShellArg cfg.root}`.
-- [ ] Audit the `mypi` wrapper, `pi-agent` wrapper, and `enterShell` hooks for unquoted interpolations.
+- [x] Replace all bare `${cfg.root}` interpolations in shell script strings with `${lib.escapeShellArg cfg.root}`.
+- [x] Audit the `mypi` wrapper, `pi-agent` wrapper, and `enterShell` hooks for unquoted interpolations.
 
 ### 2.5 Pin Python version in Nix package
 
 **Requirement**: R-020
 
-- [ ] In `packages/mypi-agent-cli.nix`, replace `python3Packages` with `python313Packages` (or make configurable) to match `pyproject.toml`'s `requires-python = ">=3.13"`.
+- [x] In `packages/mypi-agent-cli.nix`, replace `python3Packages` with `python313Packages` (or make configurable) to match `pyproject.toml`'s `requires-python = ">=3.13"`.
 
 ---
 
@@ -123,7 +123,7 @@ This is the foundational change. Everything else depends on the root import surf
 **Spec**: `options.allium` — `ModuleOptions.pi_package_name`, `ModuleOptions.pi_package_version`, `ModuleOptions.npm_install_flags`
 **Requirement**: R-005
 
-- [ ] Add options to `modules/pi-agent.nix`:
+- [x] Add options to `modules/pi-agent.nix`:
   ```nix
   piAgent.piPackageName = lib.mkOption {
     type = lib.types.str;
@@ -139,24 +139,24 @@ This is the foundational change. Everything else depends on the root import surf
     default = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
   };
   ```
-- [ ] Pass these values to the `mypi` wrapper as environment variables: `MYPI_PI_PACKAGE_NAME`, `MYPI_PI_PACKAGE_VERSION`, `MYPI_NPM_INSTALL_FLAGS`.
+- [x] Pass these values to the `mypi` wrapper as environment variables: `MYPI_PI_PACKAGE_NAME`, `MYPI_PI_PACKAGE_VERSION`, `MYPI_NPM_INSTALL_FLAGS`.
 
 ### 3.2 Update `sync.py` to use pinned versions
 
 **Spec**: `packages.allium` — `PackagePinsValidated`, `PackageInstallRecordedInManifest`
 **Requirement**: R-005
 
-- [ ] Read `MYPI_PI_PACKAGE_NAME` and `MYPI_PI_PACKAGE_VERSION` from environment.
-- [ ] If version is set, install `{name}@{version}` instead of bare `{name}`.
-- [ ] After install, read the actual installed version from `node_modules/{package}/package.json` and record it in the manifest and registry.
-- [ ] If version is not set and install_strategy is `pinned_npm`, warn or error.
+- [x] Read `MYPI_PI_PACKAGE_NAME` and `MYPI_PI_PACKAGE_VERSION` from environment.
+- [x] If version is set, install `{name}@{version}` instead of bare `{name}`.
+- [x] After install, read the actual installed version from `node_modules/{package}/package.json` and record it in the manifest and registry.
+- [x] If version is not set and install_strategy is `pinned_npm`, warn or error.
 
 ### 3.3 Update manifest schema to include version info
 
 **Spec**: `manifest.allium` — `Manifest` entity, `ManifestRecordsPiVersion`
 **Requirement**: R-014
 
-- [ ] Change the manifest JSON payload to include:
+- [x] Change the manifest JSON payload to include:
   ```json
   {
     "schema_version": 1,
@@ -167,7 +167,7 @@ This is the foundational change. Everything else depends on the root import surf
     "generated_by": "mypi-agent"
   }
   ```
-- [ ] Update `sync.py` manifest generation to populate these fields.
+- [x] Update `sync.py` manifest generation to populate these fields.
 
 ### 3.4 Update registry to record meaningful source identity
 
@@ -179,9 +179,9 @@ Current `source_hash` in `sync.py` hashes the package name string:
 source_hash=hashlib.sha256(pi_pkg.encode()).hexdigest()[:16]
 ```
 
-- [ ] Replace with a hash of actual installed artifact identity: package name + version + integrity hash.
-- [ ] Add `package_name`, `package_version`, `npm_integrity_hash`, `settings_hash`, `manifest_hash` fields to the install record JSON.
-- [ ] If available, capture the npm resolved URL from `npm ls --json`.
+- [x] Replace with a hash of actual installed artifact identity: package name + version + integrity hash.
+- [x] Add `package_name`, `package_version`, `npm_integrity_hash`, `settings_hash`, `manifest_hash` fields to the install record JSON.
+- [x] If available, capture the npm resolved URL from `npm ls --json`.
 
 ---
 
@@ -194,27 +194,27 @@ source_hash=hashlib.sha256(pi_pkg.encode()).hexdigest()[:16]
 **Spec**: `surfaces.allium` — `AgentCommandSurface`, `AgentLaunchesPi`, `AgentFailsWhenPiMissing`
 **Requirement**: R-008
 
-- [ ] Add `agent` command to `cli.py` that:
+- [x] Add `agent` command to `cli.py` that:
   - Locates the Pi executable at `paths.pi_executable_path`.
   - If not found or not executable, prints `"error: Pi is not installed. Run: mypi sync"` and exits 1.
   - If found, executes it with `os.execvp` or `subprocess.run`, forwarding all remaining args, preserving stdin/stdout/stderr and exit code.
-- [ ] Optional: add `mypi pi` as an alias.
+- [x] Optional: add `mypi pi` as an alias.
 
 ### 4.2 Remove or repurpose `mypi run`
 
 **Spec**: `surfaces.allium` — (mypi run is absent from the spec)
 **Requirement**: R-009
 
-- [ ] Remove the `run` command from `cli.py`.
-- [ ] Or rename it to `mypi runtime-check` if it's intended as diagnostics.
-- [ ] Update tests that reference `mypi run`.
+- [x] Remove the `run` command from `cli.py`.
+- [x] Or rename it to `mypi runtime-check` if it's intended as diagnostics.
+- [x] Update tests that reference `mypi run`.
 
 ### 4.3 Add `mypi needs-sync` command
 
 **Spec**: `surfaces.allium` — `NeedsSyncSurface`, `NeedsSyncChecksConfigHash`
 **Requirement**: R-022
 
-- [ ] Add `needs-sync` command to `cli.py` that:
+- [x] Add `needs-sync` command to `cli.py` that:
   - Checks if AgentRoot exists, SettingsShim exists, Manifest exists, and config hash matches.
   - Config hash inputs: `piAgent.root`, Pi package name/version, npm flags, settings schema version, manifest schema version, mypi-agent version.
   - Exits 0 if sync is needed (truthy for shell `if` usage), exits 1 if not needed.
@@ -227,11 +227,11 @@ source_hash=hashlib.sha256(pi_pkg.encode()).hexdigest()[:16]
 
 Current `sync.py` creates directories, writes JSON files, and may install npm packages even when `diff_requested=True`.
 
-- [ ] Restructure `run_sync()` into two phases:
+- [x] Restructure `run_sync()` into two phases:
   1. **Plan phase**: Build a sync plan (what would be created, updated, classified). No filesystem writes.
   2. **Apply phase**: Execute the plan. Skipped entirely when `diff_requested=True`.
-- [ ] When `diff_requested=True`, return the plan with counts and classifications but perform zero writes.
-- [ ] Add acceptance test: hash project tree before `--diff`, verify identical after.
+- [x] When `diff_requested=True`, return the plan with counts and classifications but perform zero writes.
+- [x] Add acceptance test: hash project tree before `--diff`, verify identical after.
 
 ### 4.5 Make settings repair merge instead of overwrite
 
@@ -240,8 +240,8 @@ Current `sync.py` creates directories, writes JSON files, and may install npm pa
 
 Current `sync.py` replaces the entire `.pi/settings.json` file.
 
-- [ ] Define managed keys list: `["extensions", "skills", "prompts", "themes", "enableSkillCommands"]`.
-- [ ] When writing settings:
+- [x] Define managed keys list: `["extensions", "skills", "prompts", "themes", "enableSkillCommands"]`.
+- [x] When writing settings:
   1. Read existing `.pi/settings.json` if present.
   2. Parse as JSON. If parse fails, treat as fresh file.
   3. Update only managed keys with MYPI-generated values.
@@ -255,7 +255,7 @@ Current `sync.py` replaces the entire `.pi/settings.json` file.
        "managedKeys": ["extensions", "skills", "prompts", "themes", "enableSkillCommands"]
      }
      ```
-- [ ] Use the configured `piAgent.root` for the `agentRoot` value (fix the current hardcoded `../.agents/pi`).
+- [x] Use the configured `piAgent.root` for the `agentRoot` value (fix the current hardcoded `../.agents/pi`).
 
 ### 4.6 Track write actions and report overwrites truthfully
 
@@ -264,17 +264,17 @@ Current `sync.py` replaces the entire `.pi/settings.json` file.
 
 Current `sync.py` always returns `existing_files_overwritten=False`.
 
-- [ ] Create a `WriteAction` dataclass/model with: `path`, `existed_before`, `content_changed`, `managed`.
-- [ ] For each file write in `run_sync()`, record a `WriteAction`:
+- [x] Create a `WriteAction` dataclass/model with: `path`, `existed_before`, `content_changed`, `managed`.
+- [x] For each file write in `run_sync()`, record a `WriteAction`:
   - Check if file exists before writing.
   - Compare content if file exists (hash or string compare).
-- [ ] Compute `existing_files_overwritten` from actual write actions:
+- [x] Compute `existing_files_overwritten` from actual write actions:
   ```python
   existing_files_overwritten = any(
       a.existed_before and a.content_changed for a in write_actions
   )
   ```
-- [ ] Include the `write_actions` list in `SyncResult`.
+- [x] Include the `write_actions` list in `SyncResult`.
 
 ### 4.7 Implement content-aware file classification
 
@@ -283,15 +283,15 @@ Current `sync.py` always returns `existing_files_overwritten=False`.
 
 Current `sync.py` marks any existing settings shim as `locally_modified` regardless of content.
 
-- [ ] Implement classification logic:
+- [x] Implement classification logic:
   - `missing`: file does not exist.
   - `managed_unchanged`: file exists, has MYPI marker, content matches expected payload.
   - `managed_changed`: file exists, has MYPI marker, content differs from expected.
   - `user_owned`: file exists, no MYPI marker present.
   - `user_modified`: file has marker but user added non-managed keys.
   - `invalid_json`: file exists but cannot be parsed.
-- [ ] Replace the current `_classify_file()` logic in `sync.py`.
-- [ ] Use content hashing (compare actual vs expected) rather than mere existence checks.
+- [x] Replace the current `_classify_file()` logic in `sync.py`.
+- [x] Use content hashing (compare actual vs expected) rather than mere existence checks.
 
 ### 4.8 Implement schema-based manifest validation
 
@@ -300,7 +300,7 @@ Current `sync.py` marks any existing settings shim as `locally_modified` regardl
 
 Current manifest validation in `doctor.py` accepts any JSON object.
 
-- [ ] Create a Pydantic model in `models.py`:
+- [x] Create a Pydantic model in `models.py`:
   ```python
   from typing import Literal
   class Manifest(AlliumBase):
@@ -311,19 +311,19 @@ Current manifest validation in `doctor.py` accepts any JSON object.
       node_version: str | None = None
       generated_by: str = "mypi-agent"
   ```
-- [ ] Use this model in `sync.py` when generating the manifest.
-- [ ] Use this model in `doctor.py` when validating the manifest (try `Manifest.model_validate_json()`; catch `ValidationError` as `manifest_schema_invalid`).
+- [x] Use this model in `sync.py` when generating the manifest.
+- [x] Use this model in `doctor.py` when validating the manifest (try `Manifest.model_validate_json()`; catch `ValidationError` as `manifest_schema_invalid`).
 
 ### 4.9 Implement atomic writes
 
 **Spec**: `sync.allium` — `AtomicWritePolicy`
 **Requirement**: R-024
 
-- [ ] Create a utility function `atomic_write_json(path, data)`:
+- [x] Create a utility function `atomic_write_json(path, data)`:
   1. Write to a temporary file in the same directory (e.g., `path.with_suffix('.tmp')`).
   2. `os.fsync()` the file descriptor.
   3. `os.rename()` the temp file to the target path.
-- [ ] Use this function for all JSON file writes in `sync.py`: settings.json, manifest.json, bootstrap.json, drift-report.json, installed-packages.json, primitive-registry.json.
+- [x] Use this function for all JSON file writes in `sync.py`: settings.json, manifest.json, bootstrap.json, drift-report.json, installed-packages.json, primitive-registry.json.
 
 ---
 
@@ -336,31 +336,31 @@ Current manifest validation in `doctor.py` accepts any JSON object.
 **Spec**: `doctor.allium` — `DoctorPerformsRequiredChecks` (missing_node, missing_npm)
 **Requirement**: R-007
 
-- [ ] In `doctor.py`, check `shutil.which("node")`. If absent, add `"missing_node"` error.
-- [ ] Check `shutil.which("npm")`. If absent, add `"missing_npm"` error.
+- [x] In `doctor.py`, check `shutil.which("node")`. If absent, add `"missing_node"` error.
+- [x] Check `shutil.which("npm")`. If absent, add `"missing_npm"` error.
 
 ### 5.2 Add Pi executable checks to doctor
 
 **Spec**: `doctor.allium` — `DoctorPerformsRequiredChecks` (missing_pi_agent_executable, pi_agent_executable_not_executable, pi_agent_version_check_failed)
 **Requirement**: R-007
 
-- [ ] Check `paths.pi_executable_path` exists. If not, add `"missing_pi_agent_executable"` error.
-- [ ] If it exists, check `os.access(path, os.X_OK)`. If not executable, add `"pi_agent_executable_not_executable"` error.
-- [ ] If executable, try running `pi-agent --version` (or equivalent). If it fails, add `"pi_agent_version_check_failed"` error.
+- [x] Check `paths.pi_executable_path` exists. If not, add `"missing_pi_agent_executable"` error.
+- [x] If it exists, check `os.access(path, os.X_OK)`. If not executable, add `"pi_agent_executable_not_executable"` error.
+- [x] If executable, try running `pi-agent --version` (or equivalent). If it fails, add `"pi_agent_version_check_failed"` error.
 
 ### 5.3 Add npm scope and settings root checks
 
 **Spec**: `doctor.allium` — `DoctorPerformsRequiredChecks` (npm_scope_not_project_local, settings_shim_not_pointing_to_configured_root)
 **Requirement**: R-007
 
-- [ ] Check that `NPM_CONFIG_PREFIX` env var is set and points under the agent root. If not, add `"npm_scope_not_project_local"` error.
-- [ ] Check that `.pi/settings.json` `x-mypi-agent.agentRoot` matches the configured root. If not, add `"settings_shim_not_pointing_to_configured_root"` error.
+- [x] Check that `NPM_CONFIG_PREFIX` env var is set and points under the agent root. If not, add `"npm_scope_not_project_local"` error.
+- [x] Check that `.pi/settings.json` `x-mypi-agent.agentRoot` matches the configured root. If not, add `"settings_shim_not_pointing_to_configured_root"` error.
 
 ### 5.4 Add manifest schema validation to doctor
 
 **Spec**: `doctor.allium` — `DoctorPerformsRequiredChecks` (manifest_schema_invalid)
 
-- [ ] If manifest.json exists and is valid JSON but fails `Manifest.model_validate()`, add `"manifest_schema_invalid"` error (distinct from `"invalid_manifest"` which covers missing/unparseable).
+- [x] If manifest.json exists and is valid JSON but fails `Manifest.model_validate()`, add `"manifest_schema_invalid"` error (distinct from `"invalid_manifest"` which covers missing/unparseable).
 
 ---
 
@@ -373,7 +373,7 @@ Current manifest validation in `doctor.py` accepts any JSON object.
 **Spec**: `paths.allium` — `ProjectRoot`, `DiscoverProjectRoot`
 **Requirement**: R-016
 
-- [ ] In `modules/pi-agent.nix`, set `MYPI_PROJECT_ROOT` in the wrapper or environment:
+- [x] In `modules/pi-agent.nix`, set `MYPI_PROJECT_ROOT` in the wrapper or environment:
   ```nix
   export MYPI_PROJECT_ROOT="$PWD"
   ```
@@ -384,24 +384,24 @@ Current manifest validation in `doctor.py` accepts any JSON object.
 **Spec**: `paths.allium` — `DiscoverProjectRoot`, `WalkUpwardDiscovery`
 **Requirement**: R-016
 
-- [ ] In `models.py` or a new `root_discovery.py`:
+- [x] In `models.py` or a new `root_discovery.py`:
   1. If `MYPI_PROJECT_ROOT` is set, use it.
   2. Otherwise, walk upward from `cwd` looking for `devenv.nix` or `devenv.yaml`.
   3. If found, use that directory as the project root.
   4. If not found, fail (see 6.3).
-- [ ] Update `Paths` class to use the discovered root instead of `Path.cwd()`.
+- [x] Update `Paths` class to use the discovered root instead of `Path.cwd()`.
 
 ### 6.3 Reject unmanaged directories
 
 **Spec**: `paths.allium` — `RejectUnmanagedDirectory`
 **Requirement**: R-017
 
-- [ ] If no devenv root is found and `MYPI_ALLOW_UNMANAGED` is not set, print:
+- [x] If no devenv root is found and `MYPI_ALLOW_UNMANAGED` is not set, print:
   ```
   error: mypi must be run inside a devenv-managed project
   ```
   and exit 1.
-- [ ] Add `--allow-unmanaged` flag to relevant CLI commands (or just the env var for tests).
+- [x] Add `--allow-unmanaged` flag to relevant CLI commands (or just the env var for tests).
 
 ---
 
@@ -416,7 +416,7 @@ Current manifest validation in `doctor.py` accepts any JSON object.
 
 Current bootstrap: `mypi sync >/dev/null 2>&1 || true`
 
-- [ ] Replace with:
+- [x] Replace with:
   ```nix
   enterShell = lib.mkAfter ''
     if mypi needs-sync --trigger shell; then
@@ -426,15 +426,15 @@ Current bootstrap: `mypi sync >/dev/null 2>&1 || true`
     fi
   '';
   ```
-- [ ] Ensure `--trigger shell` is passed so the sync records the trigger source.
-- [ ] Normal no-op shell entry should be quiet (no output when needs-sync returns false).
+- [x] Ensure `--trigger shell` is passed so the sync records the trigger source.
+- [x] Normal no-op shell entry should be quiet (no output when needs-sync returns false).
 
 ### 7.2 Add `piAgent.exposePiAgentShim` option
 
 **Spec**: `options.allium` — `ModuleOptions.expose_pi_agent_shim`
 **Requirement**: R-008
 
-- [ ] Add option to `modules/pi-agent.nix`:
+- [x] Add option to `modules/pi-agent.nix`:
   ```nix
   piAgent.exposePiAgentShim = lib.mkOption {
     type = lib.types.bool;
@@ -442,7 +442,7 @@ Current bootstrap: `mypi sync >/dev/null 2>&1 || true`
     description = "Expose a compatibility pi-agent command.";
   };
   ```
-- [ ] Only include `piAgentBin` in packages when `cfg.exposePiAgentShim` is true.
+- [x] Only include `piAgentBin` in packages when `cfg.exposePiAgentShim` is true.
 
 ---
 
@@ -455,15 +455,15 @@ Current bootstrap: `mypi sync >/dev/null 2>&1 || true`
 **Spec**: (not in allium; R-023 documentation requirement)
 **Requirement**: R-023
 
-- [ ] Ensure `.gitignore` (or the module's generated `.gitignore` entries) includes:
+- [x] Ensure `.gitignore` (or the module's generated `.gitignore` entries) includes:
   ```
   .agents/pi/node_modules/
   .agents/pi/.npm-cache/
   .agents/pi/bin/
   .agents/pi/.state/
   ```
-- [ ] Document that `.pi/settings.json` should be committed.
-- [ ] Document that `.agents/pi/manifest.json` may optionally be committed.
+- [x] Document that `.pi/settings.json` should be committed.
+- [x] Document that `.agents/pi/manifest.json` may optionally be committed.
 
 ---
 
@@ -478,10 +478,10 @@ Current bootstrap: `mypi sync >/dev/null 2>&1 || true`
 
 Current behavior: `locally_modified` is always `False`. `points_to_configured_root` checks for hardcoded `../.agents/pi`.
 
-- [ ] Read the settings file, parse JSON, check for `x-mypi-agent` marker.
-- [ ] Classify using the 6-state classification from 4.7.
-- [ ] Use the configured root (from `MYPI_AGENT_ROOT` env var) instead of hardcoded `../.agents/pi` when checking `points_to_configured_root`.
-- [ ] Set `locally_modified` based on actual content comparison (classification is `managed_changed` or `user_modified`).
+- [x] Read the settings file, parse JSON, check for `x-mypi-agent` marker.
+- [x] Classify using the 6-state classification from 4.7.
+- [x] Use the configured root (from `MYPI_AGENT_ROOT` env var) instead of hardcoded `../.agents/pi` when checking `points_to_configured_root`.
+- [x] Set `locally_modified` based on actual content comparison (classification is `managed_changed` or `user_modified`).
 
 ---
 
@@ -494,7 +494,7 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 **Spec**: `testing.allium` — `YamlImportOnlyFixtureExists`
 **Requirement**: R-025
 
-- [ ] Create `tests/fixtures/devenv/yaml-import-only/devenv.yaml`:
+- [x] Create `tests/fixtures/devenv/yaml-import-only/devenv.yaml`:
   ```yaml
   inputs:
     mypi-agent:
@@ -503,7 +503,7 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
   imports:
     - mypi-agent
   ```
-- [ ] Create `tests/fixtures/devenv/yaml-import-only/devenv.nix`:
+- [x] Create `tests/fixtures/devenv/yaml-import-only/devenv.nix`:
   ```nix
   { ... }:
   {
@@ -518,14 +518,14 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
     '';
   }
   ```
-- [ ] Add to the `test_devenv_fixture_verify_task` parametrized list.
+- [x] Add to the `test_devenv_fixture_verify_task` parametrized list.
 
 ### 10.2 Add tmp repo fixture test
 
 **Spec**: `testing.allium` — `TmpRepoFixtureExists`
 **Requirement**: R-026
 
-- [ ] Create a test that:
+- [x] Create a test that:
   1. Creates a fresh `tmp_path` directory.
   2. Writes a minimal `devenv.yaml` importing the local mypi-agent checkout.
   3. Runs `devenv shell --config . -- mypi sync --trigger shell`.
@@ -537,30 +537,30 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 **Spec**: `testing.allium` — `SkipDevenvTestsWhenUnavailable`
 **Requirement**: R-027
 
-- [ ] Add to `test_devenv_fixtures.py` (and any other devenv-dependent test):
+- [x] Add to `test_devenv_fixtures.py` (and any other devenv-dependent test):
   ```python
   import shutil
   if shutil.which("devenv") is None:
       pytest.skip("devenv is not installed")
   ```
-- [ ] Or use a shared pytest fixture/marker for devenv availability.
+- [x] Or use a shared pytest fixture/marker for devenv availability.
 
 ### 10.4 Add sandboxed sync tests (no network)
 
 **Spec**: `testing.allium` — `SandboxedSyncTests`
 **Requirement**: R-028
 
-- [ ] Test: npm absent — sync completes with warning `pi_agent_install_skipped_no_npm`, no crash.
-- [ ] Test: fake npm success — mock `shutil.which("npm")` and `subprocess.run`, verify sync completes with Pi installed, registry records version.
-- [ ] Test: fake npm failure — mock npm to return non-zero, verify sync completes with warning `pi_agent_install_failed`, doctor detects missing Pi.
-- [ ] Test: pinned package — verify the exact npm install command includes `@{version}` when version is set.
+- [x] Test: npm absent — sync completes with warning `pi_agent_install_skipped_no_npm`, no crash.
+- [x] Test: fake npm success — mock `shutil.which("npm")` and `subprocess.run`, verify sync completes with Pi installed, registry records version.
+- [x] Test: fake npm failure — mock npm to return non-zero, verify sync completes with warning `pi_agent_install_failed`, doctor detects missing Pi.
+- [x] Test: pinned package — verify the exact npm install command includes `@{version}` when version is set.
 
 ### 10.5 Add `--diff` no-mutation test
 
 **Spec**: `testing.allium` — `DiffNoMutationTest`
 **Requirement**: R-029
 
-- [ ] Test:
+- [x] Test:
   ```python
   def tree_hash(path):
       # hash all file paths and contents recursively
@@ -577,7 +577,7 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 **Spec**: `testing.allium` — `CustomRootSettingsTest`
 **Requirement**: R-030
 
-- [ ] Test with `MYPI_AGENT_ROOT=.agents/custom-pi`:
+- [x] Test with `MYPI_AGENT_ROOT=.agents/custom-pi`:
   - Run sync.
   - Read `.pi/settings.json`.
   - Verify `x-mypi-agent.agentRoot` is `../.agents/custom-pi` (not hardcoded `../.agents/pi`).
@@ -588,27 +588,27 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 **Spec**: `testing.allium` — `DoctorFailureTests`
 **Requirement**: R-031
 
-- [ ] Test: settings and manifest exist but Pi executable is missing → doctor exit 1, error includes `missing_pi_agent_executable`.
-- [ ] Test: Pi executable exists but is not executable (chmod 644) → doctor exit 1, error includes `pi_agent_executable_not_executable`.
-- [ ] Test: npm absent → doctor exit 1, error includes `missing_npm`.
-- [ ] Test: node absent → doctor exit 1, error includes `missing_node`.
+- [x] Test: settings and manifest exist but Pi executable is missing → doctor exit 1, error includes `missing_pi_agent_executable`.
+- [x] Test: Pi executable exists but is not executable (chmod 644) → doctor exit 1, error includes `pi_agent_executable_not_executable`.
+- [x] Test: npm absent → doctor exit 1, error includes `missing_npm`.
+- [x] Test: node absent → doctor exit 1, error includes `missing_node`.
 
 ### 10.8 Add subdirectory invocation tests
 
 **Spec**: `testing.allium` — `SubdirectoryInvocationTests`
 **Requirement**: R-032
 
-- [ ] Test from `repo/packages/example/src`:
+- [x] Test from `repo/packages/example/src`:
   - `mypi paths --json` → `project_root` is the devenv repo root, not the subdirectory.
   - `mypi sync` → creates `.pi/` and `.agents/pi/` at the repo root, not in the subdirectory.
 
 ### 10.9 Update existing tests for new behavior
 
-- [ ] Update `test_cli_sync_diff_prints_counts` to verify zero filesystem mutations.
-- [ ] Update `test_cli_doctor_reports_errors_and_exit_code` to expect new error codes (missing_node, missing_npm, missing_pi_agent_executable).
-- [ ] Update `test_sync_creates_missing_files_without_overwrite` to verify manifest schema fields.
-- [ ] Update `test_cli_run_emits_missing_env_warning_only` — either update for renamed command or remove.
-- [ ] Update `test_sync_installs_pi_agent_with_fake_npm` to verify version recording in manifest and registry.
+- [x] Update `test_cli_sync_diff_prints_counts` to verify zero filesystem mutations.
+- [x] Update `test_cli_doctor_reports_errors_and_exit_code` to expect new error codes (missing_node, missing_npm, missing_pi_agent_executable).
+- [x] Update `test_sync_creates_missing_files_without_overwrite` to verify manifest schema fields.
+- [x] Update `test_cli_run_emits_missing_env_warning_only` — either update for renamed command or remove.
+- [x] Update `test_sync_installs_pi_agent_with_fake_npm` to verify version recording in manifest and registry.
 
 ---
 
@@ -618,13 +618,13 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 
 **Requirement**: R-033
 
-- [ ] Document: what mypi-agent is, how to import from devenv.yaml, auto-enable behavior, sync/doctor/agent commands, Node/npm provisioning, generated file locations, commit/ignore policy, input pinning, piAgent.root override, disabling shell bootstrap, troubleshooting.
+- [x] Document: what mypi-agent is, how to import from devenv.yaml, auto-enable behavior, sync/doctor/agent commands, Node/npm provisioning, generated file locations, commit/ignore policy, input pinning, piAgent.root override, disabling shell bootstrap, troubleshooting.
 
 ### 11.2 Rewrite AGENTS.md
 
 **Requirement**: R-034
 
-- [ ] Replace Allium-specific content with:
+- [x] Replace Allium-specific content with:
   - This repo provides a repo-scoped MYPI/Pi agent bootstrap module.
   - Public import must stay free of development-only dependencies.
   - allium-env is development-only.
@@ -636,7 +636,7 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 
 **Requirement**: R-035
 
-- [ ] Add MIT LICENSE file to the repository root (matching pyproject.toml and Nix metadata claims).
+- [x] Add MIT LICENSE file to the repository root (matching pyproject.toml and Nix metadata claims).
 
 ---
 
@@ -644,22 +644,22 @@ Current behavior: `locally_modified` is always `False`. `points_to_configured_ro
 
 When all phases are complete, verify each item from the requirements document section 18:
 
-- [ ] Root `devenv.nix` imports `./modules/pi-agent.nix` and does not configure `allium`.
-- [ ] `allium-env` exists only in `dev/`, not the public import path.
-- [ ] A consumer can use `devenv.yaml` with `imports: - mypi-agent`.
-- [ ] The consumer receives `mypi` on `PATH`.
-- [ ] The consumer receives `node` and `npm` on `PATH`.
-- [ ] npm cache/prefix are project-local by default.
-- [ ] `mypi sync --trigger shell` can install or provision Pi.
-- [ ] `mypi doctor` fails if Pi is missing or unusable.
-- [ ] `mypi agent` launches Pi or forwards arguments to Pi.
-- [ ] `mypi sync --diff` is read-only.
-- [ ] `.pi/settings.json` repair merges MYPI-owned keys and preserves user settings.
-- [ ] Manifest validation uses a real schema.
-- [ ] State records exact Pi package/version/source identity.
-- [ ] `mypi` discovers the project root instead of using arbitrary `cwd`.
-- [ ] Integration tests skip cleanly if `devenv` is unavailable.
-- [ ] Fixture tests cover the real YAML import path.
-- [ ] README documents consumer setup and generated file policy.
-- [ ] `AGENTS.md` no longer describes Allium as the project contract.
-- [ ] `LICENSE` exists and matches project metadata.
+- [x] Root `devenv.nix` imports `./modules/pi-agent.nix` and does not configure `allium`.
+- [x] `allium-env` exists only in `dev/`, not the public import path.
+- [x] A consumer can use `devenv.yaml` with `imports: - mypi-agent`.
+- [x] The consumer receives `mypi` on `PATH`.
+- [x] The consumer receives `node` and `npm` on `PATH`.
+- [x] npm cache/prefix are project-local by default.
+- [x] `mypi sync --trigger shell` can install or provision Pi.
+- [x] `mypi doctor` fails if Pi is missing or unusable.
+- [x] `mypi agent` launches Pi or forwards arguments to Pi.
+- [x] `mypi sync --diff` is read-only.
+- [x] `.pi/settings.json` repair merges MYPI-owned keys and preserves user settings.
+- [x] Manifest validation uses a real schema.
+- [x] State records exact Pi package/version/source identity.
+- [x] `mypi` discovers the project root instead of using arbitrary `cwd`.
+- [x] Integration tests skip cleanly if `devenv` is unavailable.
+- [x] Fixture tests cover the real YAML import path.
+- [x] README documents consumer setup and generated file policy.
+- [x] `AGENTS.md` no longer describes Allium as the project contract.
+- [x] `LICENSE` exists and matches project metadata.

@@ -79,7 +79,7 @@ def test_tmp_repo_fixture_sync_and_doctor(tmp_path: Path) -> None:
 
     for command in ("mypi", "node", "npm"):
         check_result = subprocess.run(
-            ["devenv", "shell", "--", "command", "-v", command],
+            ["devenv", "shell", "--", "which", command],
             cwd=project_dir,
             text=True,
             capture_output=True,

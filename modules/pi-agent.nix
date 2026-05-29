@@ -9,6 +9,13 @@ let
     root_rel=${cfgRootEscaped}
     project_root="''${DEVENV_ROOT:-$PWD}"
     export MYPI_PROJECT_ROOT="$project_root"
+    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/$root_rel/npm-global"
+    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/$root_rel/.npm-cache"
+    export NPM_CONFIG_AUDIT="false"
+    export NPM_CONFIG_FUND="false"
+    export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
+    export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
+    export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
     if [ -n "''${DEVENV_ROOT:-}" ]; then
       cd "$DEVENV_ROOT"
     fi
@@ -96,7 +103,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    packages = [ mypiPkg mypiBin cfg.nodePackage ] ++ lib.optional cfg.exposePiAgentShim piAgentBin;
+    packages = [ mypiBin cfg.nodePackage ] ++ lib.optional cfg.exposePiAgentShim piAgentBin;
 
     enterShell = lib.mkAfter ''
       ${npmEnvCmd}
