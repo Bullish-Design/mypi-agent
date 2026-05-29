@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -75,6 +76,19 @@ def _source_hash(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _load_npm_install_flags() -> list[str]:
+    raw = os.environ.get("MYPI_NPM_INSTALL_FLAGS", "")
+    if not raw:
+        return ["--ignore-scripts", "--no-audit", "--no-fund"]
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return ["--ignore-scripts", "--no-audit", "--no-fund"]
+    if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
+        return ["--ignore-scripts", "--no-audit", "--no-fund"]
+    return parsed
+
+
 def run_sync(
     paths: Paths,
     explicit: bool,
@@ -144,19 +158,23 @@ def run_sync(
     }
 
     npm = shutil.which("npm")
+    pi_package_name = os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent")
+    pi_package_version = os.environ.get("MYPI_PI_PACKAGE_VERSION", "").strip() or None
+    npm_install_flags = _load_npm_install_flags()
     if npm is None:
         warnings.append("pi_agent_install_skipped_no_npm")
     else:
+        install_target = pi_package_name if pi_package_version is None else f"{pi_package_name}@{pi_package_version}"
+        if pi_package_version is None:
+            warnings.append("pi_package_version_unset_for_pinned_npm")
         install = subprocess.run(
             [
                 npm,
                 "install",
                 "--prefix",
                 str(paths.agent_root),
-                "--ignore-scripts",
-                "--no-audit",
-                "--no-fund",
-                "@earendil-works/pi-coding-agent",
+                *npm_install_flags,
+                install_target,
             ],
             text=True,
             capture_output=True,
@@ -164,6 +182,14 @@ def run_sync(
         )
         if install.returncode == 0:
             pi_agent_installed = True
+            installed_version = None
+            package_json_path = paths.agent_root / "node_modules" / pi_package_name / "package.json"
+            if package_json_path.exists():
+                payload = _read_json(package_json_path)
+                if isinstance(payload, dict):
+                    version_value = payload.get("version")
+                    if isinstance(version_value, str) and version_value:
+                        installed_version = version_value
             launcher = paths.agent_root / "bin" / "pi-agent"
             _ensure_dir(launcher.parent, created)
             launcher.write_text(
@@ -177,13 +203,20 @@ def run_sync(
                 created.append(launcher)
             _write_json(
                 paths.installed_packages_state_path,
-                {"packages": ["@earendil-works/pi-coding-agent"]},
+                {
+                    "packages": [
+                        {"name": pi_package_name, "version": installed_version},
+                    ]
+                },
                 created,
             )
             registry_payload["installs"] = [
                 {
-                    "package": "@earendil-works/pi-coding-agent",
-                    "source_hash": _source_hash("@earendil-works/pi-coding-agent"),
+                    "package": pi_package_name,
+                    "package_version": installed_version,
+                    "source_hash": _source_hash(
+                        f"{pi_package_name}@{installed_version or 'unknown'}"
+                    ),
                     "installed_at_rfc3339_utc": _utc_now_rfc3339(),
                 }
             ]
