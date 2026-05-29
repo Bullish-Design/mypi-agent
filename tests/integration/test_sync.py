@@ -2,9 +2,21 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+from pathlib import Path
 
 from mypi_agent.models import Paths
 from mypi_agent.sync import run_sync
+
+
+def _tree_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def test_sync_creates_missing_files_without_overwrite(tmp_path):
@@ -88,6 +100,46 @@ def test_sync_diff_mode_reports_planned_change_counts(tmp_path):
     assert result.would_create_count >= 0
     assert result.would_upgrade_count >= 0
     assert result.preserved_locally_modified_count >= 0
+
+
+def test_sync_diff_mode_is_strictly_read_only(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    run_sync(paths, explicit=True, repair_shim=False)
+    before = _tree_hash(tmp_path)
+
+    result = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    after = _tree_hash(tmp_path)
+
+    assert result.diff_requested is True
+    assert result.created == []
+    assert result.write_actions == []
+    assert before == after
+
+
+def test_sync_classifies_settings_shim_states(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    baseline = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert baseline.primitive_file_classifications["settings_shim"] == "missing"
+
+    run_sync(paths, explicit=True, repair_shim=False)
+    unchanged = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert unchanged.primitive_file_classifications["settings_shim"] == "managed_unchanged"
+
+    settings = json.loads(paths.settings_path.read_text(encoding="utf-8"))
+    settings["skills"] = ["../.agents/pi/custom-skills"]
+    paths.settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    changed = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert changed.primitive_file_classifications["settings_shim"] == "managed_changed"
+
+    settings = json.loads(paths.settings_path.read_text(encoding="utf-8"))
+    settings["userKey"] = True
+    paths.settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    user_modified = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert user_modified.primitive_file_classifications["settings_shim"] == "user_modified"
+
+    paths.settings_path.write_text("{broken", encoding="utf-8")
+    invalid = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert invalid.primitive_file_classifications["settings_shim"] == "invalid_json"
 
 
 def test_advisory_gated_on_hash_input_change(tmp_path):
