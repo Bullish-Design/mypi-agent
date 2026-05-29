@@ -1,0 +1,155 @@
+{
+  "obligations": [
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_emissions": [
+          "SyncRequested"
+        ],
+        "trigger_source": "external"
+      },
+      "description": "Verify rule AutoBootstrapOnShellEntry succeeds when all preconditions are met",
+      "id": "rule-success.AutoBootstrapOnShellEntry",
+      "source_construct": "AutoBootstrapOnShellEntry",
+      "source_span": {
+        "end": 238,
+        "start": 14
+      }
+    },
+    {
+      "category": "rule_failure",
+      "dependencies": {
+        "trigger_emissions": [
+          "SyncRequested"
+        ],
+        "trigger_source": "external"
+      },
+      "description": "Verify rule AutoBootstrapOnShellEntry is rejected when requires clause fails",
+      "id": "rule-failure.AutoBootstrapOnShellEntry.1",
+      "source_construct": "AutoBootstrapOnShellEntry",
+      "source_span": {
+        "end": 172,
+        "start": 76
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncBootstrap succeeds when all preconditions are met",
+      "id": "rule-success.SyncBootstrap",
+      "source_construct": "SyncBootstrap",
+      "source_span": {
+        "end": 587,
+        "start": 240
+      }
+    },
+    {
+      "category": "rule_failure",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncBootstrap is rejected when requires clause fails",
+      "id": "rule-failure.SyncBootstrap.1",
+      "source_construct": "SyncBootstrap",
+      "source_span": {
+        "end": 408,
+        "start": 312
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncManifestHeal succeeds when all preconditions are met",
+      "id": "rule-success.SyncManifestHeal",
+      "source_construct": "SyncManifestHeal",
+      "source_span": {
+        "end": 861,
+        "start": 589
+      }
+    },
+    {
+      "category": "rule_failure",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncManifestHeal is rejected when requires clause fails",
+      "id": "rule-failure.SyncManifestHeal.1",
+      "source_construct": "SyncManifestHeal",
+      "source_span": {
+        "end": 721,
+        "start": 647
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncShimUpdate succeeds when all preconditions are met",
+      "id": "rule-success.SyncShimUpdate",
+      "source_construct": "SyncShimUpdate",
+      "source_span": {
+        "end": 1094,
+        "start": 863
+      }
+    },
+    {
+      "category": "rule_failure",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncShimUpdate is rejected when requires clause fails",
+      "id": "rule-failure.SyncShimUpdate.1",
+      "source_construct": "SyncShimUpdate",
+      "source_span": {
+        "end": 992,
+        "start": 949
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_emissions": [
+          "SyncCompleted"
+        ],
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule SyncFinalize succeeds when all preconditions are met",
+      "id": "rule-success.SyncFinalize",
+      "source_construct": "SyncFinalize",
+      "source_span": {
+        "end": 1375,
+        "start": 1096
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "external"
+      },
+      "description": "Verify rule ManualUpgradePosture succeeds when all preconditions are met",
+      "id": "rule-success.ManualUpgradePosture",
+      "source_construct": "ManualUpgradePosture",
+      "source_span": {
+        "end": 1540,
+        "start": 1377
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant NoOverwriteByDefault holds after every state-changing rule that touches constrained entities",
+      "expression": "not SyncRun.existing_files_overwritten",
+      "id": "invariant.NoOverwriteByDefault",
+      "source_construct": "NoOverwriteByDefault",
+      "source_span": {
+        "end": 1619,
+        "start": 1542
+      }
+    }
+  ],
+  "version": 3
+}

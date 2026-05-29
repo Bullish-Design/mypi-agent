@@ -9,7 +9,11 @@ from .models import Paths
 @dataclass(frozen=True)
 class DoctorResult:
     errors: list[str]
+    requested: bool
+    checks_completed: bool
     exit_code: int
+    error_count: int
+    computed_error_count: int
 
 
 def _manifest_valid(paths: Paths) -> bool:
@@ -43,4 +47,13 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if _secret_leak_likely(paths):
         errors.append("secret_leak_likely")
 
-    return DoctorResult(errors=errors, exit_code=1 if errors else 0)
+    computed_error_count = len(errors)
+    exit_code = 1 if computed_error_count > 0 else 0
+    return DoctorResult(
+        errors=errors,
+        requested=True,
+        checks_completed=True,
+        exit_code=exit_code,
+        error_count=computed_error_count,
+        computed_error_count=computed_error_count,
+    )

@@ -1,0 +1,21 @@
+{
+  "obligations": [
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_emissions": [
+          "PackagePinsChecked"
+        ],
+        "trigger_source": "external"
+      },
+      "description": "Verify rule PackagePinsValidated succeeds when all preconditions are met",
+      "id": "rule-success.PackagePinsValidated",
+      "source_construct": "PackagePinsValidated",
+      "source_span": {
+        "end": 103,
+        "start": 14
+      }
+    }
+  ],
+  "version": 3
+}

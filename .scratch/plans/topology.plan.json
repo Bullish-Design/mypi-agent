@@ -1,0 +1,79 @@
+{
+  "obligations": [
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on UseTopologyPolicy are present with correct types",
+      "detail": {
+        "fields": [
+          "per_file_use_graph_built",
+          "trigger_providers_consumers_coevaluated",
+          "analysis_unit_is_single_per_file_graph"
+        ]
+      },
+      "id": "entity-fields.UseTopologyPolicy",
+      "source_construct": "UseTopologyPolicy",
+      "source_span": {
+        "end": 185,
+        "start": 14
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "entities_written": [
+          "UseTopologyPolicy"
+        ],
+        "trigger_emissions": [
+          "PerFileUseGraphBuilt"
+        ],
+        "trigger_source": "external"
+      },
+      "description": "Verify rule BuildPerFileUseGraph succeeds when all preconditions are met",
+      "id": "rule-success.BuildPerFileUseGraph",
+      "source_construct": "BuildPerFileUseGraph",
+      "source_span": {
+        "end": 417,
+        "start": 187
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "entities_written": [
+          "UseTopologyPolicy"
+        ],
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule CoevaluateTriggerProvidersConsumers succeeds when all preconditions are met",
+      "id": "rule-success.CoevaluateTriggerProvidersConsumers",
+      "source_construct": "CoevaluateTriggerProvidersConsumers",
+      "source_span": {
+        "end": 574,
+        "start": 419
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant PerFileUseTopologyIsSingleAnalysisUnit holds after every state-changing rule that touches constrained entities",
+      "expression": "UseTopologyPolicy.analysis_unit_is_single_per_file_graph",
+      "id": "invariant.PerFileUseTopologyIsSingleAnalysisUnit",
+      "source_construct": "PerFileUseTopologyIsSingleAnalysisUnit",
+      "source_span": {
+        "end": 689,
+        "start": 576
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant ProvidersConsumersEvaluatedTogether holds after every state-changing rule that touches constrained entities",
+      "expression": "UseTopologyPolicy.trigger_providers_consumers_coevaluated",
+      "id": "invariant.ProvidersConsumersEvaluatedTogether",
+      "source_construct": "ProvidersConsumersEvaluatedTogether",
+      "source_span": {
+        "end": 802,
+        "start": 691
+      }
+    }
+  ],
+  "version": 3
+}

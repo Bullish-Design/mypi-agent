@@ -15,6 +15,7 @@ def test_cli_sync_creates_required_layout(tmp_path, monkeypatch):
     assert (tmp_path / ".pi" / "settings.json").exists()
     assert (tmp_path / ".agents" / "pi" / "primitives").exists()
     assert (tmp_path / ".agents" / "pi" / "packages").exists()
+    assert "advisory: upgrades require explicit sync" in result.stdout
 
 
 def test_cli_sync_repair_shim_rewrites_existing(tmp_path, monkeypatch):
@@ -44,3 +45,10 @@ def test_cli_doctor_success_after_sync(tmp_path, monkeypatch):
 
     doctor_result = runner.invoke(app, ["doctor"], catch_exceptions=False)
     assert doctor_result.exit_code == 0
+
+
+def test_cli_run_emits_missing_env_warning_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["run"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "warning: missing_env_files" in result.stdout

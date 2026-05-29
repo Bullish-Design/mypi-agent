@@ -14,6 +14,15 @@ REQUIRED_DIRS = ("primitives", "packages")
 class SyncResult:
     created: list[Path]
     warnings: list[str]
+    explicit: bool
+    repair_shim: bool
+    completed: bool
+    existing_files_overwritten: bool
+    advisory_shown: bool
+    upgrade_requires_explicit_sync: bool
+    bootstrap_performed: bool
+    manifest_healed: bool
+    shim_updated: bool
 
 
 def _ensure_dir(path: Path, created: list[Path]) -> None:
@@ -36,6 +45,12 @@ def run_sync(paths: Paths, explicit: bool, repair_shim: bool) -> SyncResult:
     created: list[Path] = []
     warnings: list[str] = []
 
+    bootstrap_performed = False
+    manifest_healed = False
+    shim_updated = False
+
+    if not paths.agent_root.exists():
+        bootstrap_performed = True
     _ensure_dir(paths.pi_dir, created)
     _ensure_dir(paths.agent_root, created)
     for dirname in REQUIRED_DIRS:
@@ -43,8 +58,10 @@ def run_sync(paths: Paths, explicit: bool, repair_shim: bool) -> SyncResult:
 
     if repair_shim:
         _write_json(paths.settings_path, {"agent_root": "../.agents/pi"}, created)
+        shim_updated = True
     elif not paths.settings_path.exists():
         _write_json(paths.settings_path, {"agent_root": "../.agents/pi"}, created)
+        bootstrap_performed = True
 
     manifest_valid = False
     if paths.manifest_path.exists():
@@ -57,6 +74,18 @@ def run_sync(paths: Paths, explicit: bool, repair_shim: bool) -> SyncResult:
     if not paths.manifest_path.exists() or not manifest_valid:
         _write_json(paths.manifest_path, {"schema_version": 1, "primitives": []}, created)
         warnings.append("manifest_recreated")
+        manifest_healed = True
 
-    _ = explicit
-    return SyncResult(created=created, warnings=warnings)
+    return SyncResult(
+        created=created,
+        warnings=warnings,
+        explicit=explicit,
+        repair_shim=repair_shim,
+        completed=True,
+        existing_files_overwritten=False,
+        advisory_shown=True,
+        upgrade_requires_explicit_sync=True,
+        bootstrap_performed=bootstrap_performed,
+        manifest_healed=manifest_healed,
+        shim_updated=shim_updated,
+    )

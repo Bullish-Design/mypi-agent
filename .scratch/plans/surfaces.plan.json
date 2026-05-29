@@ -1,0 +1,155 @@
+{
+  "obligations": [
+    {
+      "category": "surface_actor",
+      "description": "Verify surface ShellEntrySurface is accessible only to the specified actor",
+      "id": "surface-actor.ShellEntrySurface",
+      "source_construct": "ShellEntrySurface",
+      "source_span": {
+        "end": 138,
+        "start": 14
+      }
+    },
+    {
+      "category": "surface_provides",
+      "description": "Verify provided operations on ShellEntrySurface appear/hide based on when conditions",
+      "id": "surface-provides.ShellEntrySurface",
+      "source_construct": "ShellEntrySurface",
+      "source_span": {
+        "end": 136,
+        "start": 74
+      }
+    },
+    {
+      "category": "surface_actor",
+      "description": "Verify surface MypiCommand is accessible only to the specified actor",
+      "id": "surface-actor.MypiCommand",
+      "source_construct": "MypiCommand",
+      "source_span": {
+        "end": 814,
+        "start": 140
+      }
+    },
+    {
+      "category": "surface_provides",
+      "description": "Verify provided operations on MypiCommand appear/hide based on when conditions",
+      "id": "surface-provides.MypiCommand",
+      "source_construct": "MypiCommand",
+      "source_span": {
+        "end": 225,
+        "start": 194
+      }
+    },
+    {
+      "category": "surface_exposure",
+      "description": "Verify each exposed item on MypiCommand is accessible",
+      "detail": {
+        "items": [
+          "runtime_env_load_attempted",
+          "runtime_env_load_completed",
+          "config_write_attempted",
+          "config_write_blocked",
+          "secrets_available_at_evaluation_time",
+          "secrets_written_to_generated_config",
+          "missing_env_files_warning",
+          "warning_reason_missing_env_files_only"
+        ],
+        "surface": "MypiCommand"
+      },
+      "id": "surface-exposure.MypiCommand",
+      "source_construct": "MypiCommand",
+      "source_span": {
+        "end": 698,
+        "start": 231
+      }
+    },
+    {
+      "category": "surface_actor",
+      "description": "Verify surface SyncCommandSurface is accessible only to the specified actor",
+      "id": "surface-actor.SyncCommandSurface",
+      "source_construct": "SyncCommandSurface",
+      "source_span": {
+        "end": 1550,
+        "start": 816
+      }
+    },
+    {
+      "category": "surface_provides",
+      "description": "Verify provided operations on SyncCommandSurface appear/hide based on when conditions",
+      "id": "surface-provides.SyncCommandSurface",
+      "source_construct": "SyncCommandSurface",
+      "source_span": {
+        "end": 1001,
+        "start": 877
+      }
+    },
+    {
+      "category": "surface_exposure",
+      "description": "Verify each exposed item on SyncCommandSurface is accessible",
+      "detail": {
+        "items": [
+          "explicit",
+          "repair_shim",
+          "completed",
+          "existing_files_overwritten",
+          "bootstrap_performed",
+          "manifest_healed",
+          "shim_updated",
+          "advisory_shown",
+          "upgrade_requires_explicit_sync",
+          "exists",
+          "valid_json",
+          "points_to_configured_root"
+        ],
+        "surface": "SyncCommandSurface"
+      },
+      "id": "surface-exposure.SyncCommandSurface",
+      "source_construct": "SyncCommandSurface",
+      "source_span": {
+        "end": 1429,
+        "start": 1007
+      }
+    },
+    {
+      "category": "surface_actor",
+      "description": "Verify surface DoctorCommandSurface is accessible only to the specified actor",
+      "id": "surface-actor.DoctorCommandSurface",
+      "source_construct": "DoctorCommandSurface",
+      "source_span": {
+        "end": 1826,
+        "start": 1552
+      }
+    },
+    {
+      "category": "surface_provides",
+      "description": "Verify provided operations on DoctorCommandSurface appear/hide based on when conditions",
+      "id": "surface-provides.DoctorCommandSurface",
+      "source_construct": "DoctorCommandSurface",
+      "source_span": {
+        "end": 1650,
+        "start": 1615
+      }
+    },
+    {
+      "category": "surface_exposure",
+      "description": "Verify each exposed item on DoctorCommandSurface is accessible",
+      "detail": {
+        "items": [
+          "requested",
+          "checks_completed",
+          "error_count",
+          "computed_error_count",
+          "exit_code"
+        ],
+        "surface": "DoctorCommandSurface"
+      },
+      "id": "surface-exposure.DoctorCommandSurface",
+      "source_construct": "DoctorCommandSurface",
+      "source_span": {
+        "end": 1824,
+        "start": 1656
+      }
+    }
+  ],
+  "version": 3
+}

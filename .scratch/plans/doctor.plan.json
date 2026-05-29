@@ -1,0 +1,73 @@
+{
+  "obligations": [
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "external"
+      },
+      "description": "Verify rule DoctorRunStarted succeeds when all preconditions are met",
+      "id": "rule-success.DoctorRunStarted",
+      "source_construct": "DoctorRunStarted",
+      "source_span": {
+        "end": 242,
+        "start": 14
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_emissions": [
+          "DoctorError"
+        ],
+        "trigger_source": "external"
+      },
+      "description": "Verify rule DoctorPerformsRequiredChecks succeeds when all preconditions are met",
+      "id": "rule-success.DoctorPerformsRequiredChecks",
+      "source_construct": "DoctorPerformsRequiredChecks",
+      "source_span": {
+        "end": 819,
+        "start": 244
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "chained"
+      },
+      "description": "Verify rule DoctorCountsErrors succeeds when all preconditions are met",
+      "id": "rule-success.DoctorCountsErrors",
+      "source_construct": "DoctorCountsErrors",
+      "source_span": {
+        "end": 959,
+        "start": 821
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "external"
+      },
+      "description": "Verify rule DoctorFinalizeCounts succeeds when all preconditions are met",
+      "id": "rule-success.DoctorFinalizeCounts",
+      "source_construct": "DoctorFinalizeCounts",
+      "source_span": {
+        "end": 1102,
+        "start": 961
+      }
+    },
+    {
+      "category": "rule_success",
+      "dependencies": {
+        "trigger_source": "external"
+      },
+      "description": "Verify rule DoctorExitCodePolicy succeeds when all preconditions are met",
+      "id": "rule-success.DoctorExitCodePolicy",
+      "source_construct": "DoctorExitCodePolicy",
+      "source_span": {
+        "end": 1345,
+        "start": 1104
+      }
+    }
+  ],
+  "version": 3
+}

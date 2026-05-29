@@ -1,0 +1,206 @@
+{
+  "obligations": [
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on SettingsShim are present with correct types",
+      "detail": {
+        "fields": [
+          "exists",
+          "locally_modified",
+          "points_to_configured_root"
+        ]
+      },
+      "id": "entity-fields.SettingsShim",
+      "source_construct": "SettingsShim",
+      "source_span": {
+        "end": 126,
+        "start": 14
+      }
+    },
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on AgentRoot are present with correct types",
+      "detail": {
+        "fields": [
+          "exists",
+          "required_dirs_present"
+        ]
+      },
+      "id": "entity-fields.AgentRoot",
+      "source_construct": "AgentRoot",
+      "source_span": {
+        "end": 203,
+        "start": 128
+      }
+    },
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on InstalledManifest are present with correct types",
+      "detail": {
+        "fields": [
+          "exists",
+          "valid_json"
+        ]
+      },
+      "id": "entity-fields.InstalledManifest",
+      "source_construct": "InstalledManifest",
+      "source_span": {
+        "end": 277,
+        "start": 205
+      }
+    },
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on SyncRun are present with correct types",
+      "detail": {
+        "fields": [
+          "explicit",
+          "repair_shim",
+          "completed",
+          "existing_files_overwritten",
+          "advisory_shown",
+          "upgrade_requires_explicit_sync",
+          "bootstrap_performed",
+          "manifest_healed",
+          "shim_updated"
+        ]
+      },
+      "id": "entity-fields.SyncRun",
+      "source_construct": "SyncRun",
+      "source_span": {
+        "end": 567,
+        "start": 279
+      }
+    },
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on SecretRuntimePolicy are present with correct types",
+      "detail": {
+        "fields": [
+          "runtime_env_load_attempted",
+          "runtime_env_load_completed",
+          "missing_env_files_warning",
+          "secrets_written_to_generated_config",
+          "secrets_available_at_evaluation_time",
+          "config_write_attempted",
+          "config_write_blocked",
+          "warning_reason_missing_env_files_only"
+        ]
+      },
+      "id": "entity-fields.SecretRuntimePolicy",
+      "source_construct": "SecretRuntimePolicy",
+      "source_span": {
+        "end": 938,
+        "start": 569
+      }
+    },
+    {
+      "category": "entity_fields",
+      "description": "Verify all declared fields on DoctorRun are present with correct types",
+      "detail": {
+        "fields": [
+          "requested",
+          "checks_completed",
+          "error_count",
+          "computed_error_count",
+          "exit_code"
+        ]
+      },
+      "id": "entity-fields.DoctorRun",
+      "source_construct": "DoctorRun",
+      "source_span": {
+        "end": 1095,
+        "start": 940
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant RequiredFilesEventuallyMaterialized holds after every state-changing rule that touches constrained entities",
+      "expression": "AgentRoot.exists implies AgentRoot.required_dirs_present",
+      "id": "invariant.RequiredFilesEventuallyMaterialized",
+      "source_construct": "RequiredFilesEventuallyMaterialized",
+      "source_span": {
+        "end": 1207,
+        "start": 1097
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant SyncNonDestructive holds after every state-changing rule that touches constrained entities",
+      "expression": "not SyncRun.existing_files_overwritten",
+      "id": "invariant.SyncNonDestructive",
+      "source_construct": "SyncNonDestructive",
+      "source_span": {
+        "end": 1284,
+        "start": 1209
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant ExplicitOnlyUpgrades holds after every state-changing rule that touches constrained entities",
+      "expression": "SyncRun.upgrade_requires_explicit_sync",
+      "id": "invariant.ExplicitOnlyUpgrades",
+      "source_construct": "ExplicitOnlyUpgrades",
+      "source_span": {
+        "end": 1363,
+        "start": 1286
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant ManifestValidityAfterSync holds after every state-changing rule that touches constrained entities",
+      "expression": "SyncRun.completed implies InstalledManifest.valid_json",
+      "id": "invariant.ManifestValidityAfterSync",
+      "source_construct": "ManifestValidityAfterSync",
+      "source_span": {
+        "end": 1463,
+        "start": 1365
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant NoSecretPersistence holds after every state-changing rule that touches constrained entities",
+      "expression": "not SecretRuntimePolicy.secrets_written_to_generated_config",
+      "id": "invariant.NoSecretPersistence",
+      "source_construct": "NoSecretPersistence",
+      "source_span": {
+        "end": 1562,
+        "start": 1465
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant NoEvalTimeSecrets holds after every state-changing rule that touches constrained entities",
+      "expression": "not SecretRuntimePolicy.secrets_available_at_evaluation_time",
+      "id": "invariant.NoEvalTimeSecrets",
+      "source_construct": "NoEvalTimeSecrets",
+      "source_span": {
+        "end": 1660,
+        "start": 1564
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant NoSecretConfigWrites holds after every state-changing rule that touches constrained entities",
+      "expression": "SecretRuntimePolicy.config_write_attempted implies SecretRuntimePolicy.config_write_blocked",
+      "id": "invariant.NoSecretConfigWrites",
+      "source_construct": "NoSecretConfigWrites",
+      "source_span": {
+        "end": 1792,
+        "start": 1662
+      }
+    },
+    {
+      "category": "invariant",
+      "description": "Verify invariant EnvWarningScope holds after every state-changing rule that touches constrained entities",
+      "expression": "SecretRuntimePolicy.missing_env_files_warning implies SecretRuntimePolicy.warning_reason_missing_env_files_only",
+      "id": "invariant.EnvWarningScope",
+      "source_construct": "EnvWarningScope",
+      "source_span": {
+        "end": 1939,
+        "start": 1794
+      }
+    }
+  ],
+  "version": 3
+}

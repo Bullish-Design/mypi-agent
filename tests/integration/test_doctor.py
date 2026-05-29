@@ -10,6 +10,10 @@ def test_doctor_reports_missing_artifacts(tmp_path):
     assert "missing_settings_shim" in result.errors
     assert "missing_agent_root" in result.errors
     assert "invalid_manifest" in result.errors
+    assert result.requested is True
+    assert result.checks_completed is True
+    assert result.error_count == len(result.errors)
+    assert result.computed_error_count == len(result.errors)
     assert result.exit_code == 1
 
 
@@ -19,6 +23,8 @@ def test_doctor_success_after_sync(tmp_path):
 
     result = run_doctor(paths)
     assert result.errors == []
+    assert result.error_count == 0
+    assert result.computed_error_count == 0
     assert result.exit_code == 0
 
 
