@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 from pydantic import ValidationError
 
 from .base_model import AlliumBase
@@ -63,6 +65,22 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if shutil.which("npm") is None:
         errors.append("missing_npm")
         diagnostics.append({"code": "missing_npm", "severity": "error"})
+    if not paths.pi_executable_path.exists():
+        errors.append("missing_pi_agent_executable")
+        diagnostics.append({"code": "missing_pi_agent_executable", "severity": "error"})
+    elif not os.access(paths.pi_executable_path, os.X_OK):
+        errors.append("pi_agent_executable_not_executable")
+        diagnostics.append({"code": "pi_agent_executable_not_executable", "severity": "error"})
+    else:
+        version_check = subprocess.run(
+            [str(paths.pi_executable_path), "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if version_check.returncode != 0:
+            errors.append("pi_agent_version_check_failed")
+            diagnostics.append({"code": "pi_agent_version_check_failed", "severity": "error"})
 
     computed_error_count = len(errors)
     exit_code = 1 if computed_error_count > 0 else 0
