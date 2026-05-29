@@ -17,7 +17,12 @@ surface MypiCommand {
     exposes:
         SecretRuntimePolicy.runtime_env_load_attempted
         SecretRuntimePolicy.runtime_env_load_completed
+        SecretRuntimePolicy.config_write_attempted
+        SecretRuntimePolicy.config_write_blocked
+        SecretRuntimePolicy.secrets_available_at_evaluation_time
+        SecretRuntimePolicy.secrets_written_to_generated_config
         SecretRuntimePolicy.missing_env_files_warning
+        SecretRuntimePolicy.warning_reason_missing_env_files_only
 
     @guarantee Passthrough
         -- The wrapper delegates to Pi CLI and preserves arguments and exit behavior.
@@ -35,6 +40,9 @@ surface SyncCommandSurface {
         SyncRun.repair_shim
         SyncRun.completed
         SyncRun.existing_files_overwritten
+        SyncRun.bootstrap_performed
+        SyncRun.manifest_healed
+        SyncRun.shim_updated
         SyncRun.advisory_shown
         SyncRun.upgrade_requires_explicit_sync
         InstalledManifest.exists
@@ -53,6 +61,8 @@ surface DoctorCommandSurface {
 
     exposes:
         DoctorRun.requested
+        DoctorRun.checks_completed
         DoctorRun.error_count
+        DoctorRun.computed_error_count
         DoctorRun.exit_code
 }

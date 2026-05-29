@@ -1,0 +1,18 @@
+{
+  "fields": [
+    {
+      "name": "exists",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "locally_modified",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "points_to_configured_root",
+      "type_expr": "Boolean"
+    }
+  ],
+  "kind": "internal",
+  "name": "SettingsShim"
+}

@@ -1,0 +1,14 @@
+{
+  "fields": [
+    {
+      "name": "exists",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "valid_json",
+      "type_expr": "Boolean"
+    }
+  ],
+  "kind": "internal",
+  "name": "InstalledManifest"
+}

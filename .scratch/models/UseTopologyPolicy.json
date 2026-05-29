@@ -1,0 +1,18 @@
+{
+  "fields": [
+    {
+      "name": "per_file_use_graph_built",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "trigger_providers_consumers_coevaluated",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "analysis_unit_is_single_per_file_graph",
+      "type_expr": "Boolean"
+    }
+  ],
+  "kind": "internal",
+  "name": "UseTopologyPolicy"
+}

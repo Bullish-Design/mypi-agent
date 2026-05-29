@@ -6,11 +6,32 @@ rule AutoBootstrapOnShellEntry {
     ensures: SyncRequested(explicit: false, repair_shim: false)
 }
 
-rule SyncCreatesMissingOnly {
+rule SyncBootstrap {
     when: SyncRequested(explicit, repair_shim)
+    requires: not AgentRoot.exists or not AgentRoot.required_dirs_present or not SettingsShim.exists
     ensures: AgentRoot.exists = true
     ensures: AgentRoot.required_dirs_present = true
     ensures: SettingsShim.exists = true
+    ensures: SyncRun.bootstrap_performed = true
+}
+
+rule SyncManifestHeal {
+    when: SyncRequested(_, _)
+    requires: not InstalledManifest.exists or not InstalledManifest.valid_json
+    ensures: InstalledManifest.exists = true
+    ensures: InstalledManifest.valid_json = true
+    ensures: SyncRun.manifest_healed = true
+}
+
+rule SyncShimUpdate {
+    when: SyncRequested(explicit: true, repair_shim: false)
+    requires: not SettingsShim.locally_modified
+    ensures: SettingsShim.points_to_configured_root = true
+    ensures: SyncRun.shim_updated = true
+}
+
+rule SyncFinalize {
+    when: SyncRequested(explicit, repair_shim)
     ensures: SyncRun.explicit = explicit
     ensures: SyncRun.repair_shim = repair_shim
     ensures: SyncRun.existing_files_overwritten = false
@@ -22,19 +43,6 @@ rule ManualUpgradePosture {
     when: DesiredStateChanged()
     ensures: SyncRun.advisory_shown = true
     ensures: SyncRun.upgrade_requires_explicit_sync = true
-}
-
-rule ManifestSelfHealWhenMissingOrCorrupt {
-    when: SyncRequested(_, _)
-    requires: not InstalledManifest.exists or not InstalledManifest.valid_json
-    ensures: InstalledManifest.exists = true
-    ensures: InstalledManifest.valid_json = true
-}
-
-rule ShimUpdatedOnlyWhenAllowed {
-    when: SyncRequested(explicit: true, repair_shim: false)
-    requires: not SettingsShim.locally_modified
-    ensures: SettingsShim.points_to_configured_root = true
 }
 
 invariant NoOverwriteByDefault {

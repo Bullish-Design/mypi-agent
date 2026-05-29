@@ -1,0 +1,26 @@
+{
+  "fields": [
+    {
+      "name": "requested",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "checks_completed",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "error_count",
+      "type_expr": "Integer"
+    },
+    {
+      "name": "computed_error_count",
+      "type_expr": "Integer"
+    },
+    {
+      "name": "exit_code",
+      "type_expr": "Integer"
+    }
+  ],
+  "kind": "internal",
+  "name": "DoctorRun"
+}

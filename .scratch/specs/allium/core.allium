@@ -23,6 +23,9 @@ entity SyncRun {
     existing_files_overwritten: Boolean
     advisory_shown: Boolean
     upgrade_requires_explicit_sync: Boolean
+    bootstrap_performed: Boolean
+    manifest_healed: Boolean
+    shim_updated: Boolean
 }
 
 entity SecretRuntimePolicy {
@@ -31,11 +34,16 @@ entity SecretRuntimePolicy {
     missing_env_files_warning: Boolean
     secrets_written_to_generated_config: Boolean
     secrets_available_at_evaluation_time: Boolean
+    config_write_attempted: Boolean
+    config_write_blocked: Boolean
+    warning_reason_missing_env_files_only: Boolean
 }
 
 entity DoctorRun {
     requested: Boolean
+    checks_completed: Boolean
     error_count: Integer
+    computed_error_count: Integer
     exit_code: Integer
 }
 
@@ -47,10 +55,26 @@ invariant SyncNonDestructive {
     not SyncRun.existing_files_overwritten
 }
 
+invariant ExplicitOnlyUpgrades {
+    SyncRun.upgrade_requires_explicit_sync
+}
+
+invariant ManifestValidityAfterSync {
+    SyncRun.completed implies InstalledManifest.valid_json
+}
+
 invariant NoSecretPersistence {
     not SecretRuntimePolicy.secrets_written_to_generated_config
 }
 
 invariant NoEvalTimeSecrets {
     not SecretRuntimePolicy.secrets_available_at_evaluation_time
+}
+
+invariant NoSecretConfigWrites {
+    SecretRuntimePolicy.config_write_attempted implies SecretRuntimePolicy.config_write_blocked
+}
+
+invariant EnvWarningScope {
+    SecretRuntimePolicy.missing_env_files_warning implies SecretRuntimePolicy.warning_reason_missing_env_files_only
 }

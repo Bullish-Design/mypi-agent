@@ -1,0 +1,42 @@
+{
+  "fields": [
+    {
+      "name": "explicit",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "repair_shim",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "completed",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "existing_files_overwritten",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "advisory_shown",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "upgrade_requires_explicit_sync",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "bootstrap_performed",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "manifest_healed",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "shim_updated",
+      "type_expr": "Boolean"
+    }
+  ],
+  "kind": "internal",
+  "name": "SyncRun"
+}

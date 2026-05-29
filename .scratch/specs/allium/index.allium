@@ -6,3 +6,4 @@ use "./secrets.allium" as secrets
 use "./packages.allium" as packages
 use "./doctor.allium" as doctor
 use "./surfaces.allium" as surfaces
+use "./topology.allium" as topology

@@ -1,0 +1,14 @@
+{
+  "fields": [
+    {
+      "name": "exists",
+      "type_expr": "Boolean"
+    },
+    {
+      "name": "required_dirs_present",
+      "type_expr": "Boolean"
+    }
+  ],
+  "kind": "internal",
+  "name": "AgentRoot"
+}
