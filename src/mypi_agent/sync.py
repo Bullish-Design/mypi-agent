@@ -76,6 +76,17 @@ def _source_hash(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _manifest_payload(pi_package_name: str, pi_version: str | None, node_version: str | None) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "resources": list(RESOURCE_DIRS),
+        "pi_package": pi_package_name,
+        "pi_version": pi_version,
+        "node_version": node_version,
+        "generated_by": "mypi-agent",
+    }
+
+
 def _load_npm_install_flags() -> list[str]:
     raw = os.environ.get("MYPI_NPM_INSTALL_FLAGS", "")
     if not raw:
@@ -132,19 +143,6 @@ def run_sync(
         _write_json(paths.settings_path, settings_payload, created)
         bootstrap_performed = True
 
-    manifest_valid = False
-    if paths.manifest_path.exists():
-        try:
-            payload = _read_json(paths.manifest_path)
-            manifest_valid = isinstance(payload, dict)
-        except json.JSONDecodeError:
-            manifest_valid = False
-
-    if not paths.manifest_path.exists() or not manifest_valid:
-        _write_json(paths.manifest_path, {"schema_version": 1, "resources": list(RESOURCE_DIRS)}, created)
-        warnings.append("manifest_recreated")
-        manifest_healed = True
-
     _write_json(paths.bootstrap_state_path, {"status": "completed", "trigger": trigger}, created)
     if not paths.diagnostics_path.exists():
         paths.diagnostics_path.write_text("", encoding="utf-8")
@@ -161,6 +159,14 @@ def run_sync(
     pi_package_name = os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent")
     pi_package_version = os.environ.get("MYPI_PI_PACKAGE_VERSION", "").strip() or None
     npm_install_flags = _load_npm_install_flags()
+    node_version: str | None = None
+    node_bin = shutil.which("node")
+    if node_bin is not None:
+        node_version_result = subprocess.run([node_bin, "--version"], text=True, capture_output=True, check=False)
+        if node_version_result.returncode == 0:
+            node_version = node_version_result.stdout.strip()
+
+    installed_version: str | None = None
     if npm is None:
         warnings.append("pi_agent_install_skipped_no_npm")
     else:
@@ -182,7 +188,6 @@ def run_sync(
         )
         if install.returncode == 0:
             pi_agent_installed = True
-            installed_version = None
             package_json_path = paths.agent_root / "node_modules" / pi_package_name / "package.json"
             if package_json_path.exists():
                 payload = _read_json(package_json_path)
@@ -222,6 +227,12 @@ def run_sync(
             ]
         else:
             warnings.append("pi_agent_install_failed")
+
+    manifest_payload = _manifest_payload(pi_package_name, installed_version, node_version)
+    _write_json(paths.manifest_path, manifest_payload, created)
+    if not pre_manifest_exists or not pre_manifest_valid:
+        warnings.append("manifest_recreated")
+        manifest_healed = True
 
     if "core" not in (registry_payload.get("groups") or {}):
         raise RuntimeError("primitive registry missing required core group")

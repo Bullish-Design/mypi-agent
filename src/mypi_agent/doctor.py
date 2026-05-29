@@ -23,7 +23,20 @@ def _manifest_valid(paths: Paths) -> bool:
         payload = json.loads(paths.manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return False
-    return isinstance(payload, dict)
+    if not isinstance(payload, dict):
+        return False
+    required = ("schema_version", "resources", "pi_package", "pi_version", "node_version", "generated_by")
+    if any(key not in payload for key in required):
+        return False
+    if payload.get("schema_version") != 1:
+        return False
+    if payload.get("generated_by") != "mypi-agent":
+        return False
+    resources = payload.get("resources")
+    if not isinstance(resources, list):
+        return False
+    allowed_resources = {"extensions", "skills", "prompts", "themes"}
+    return all(isinstance(item, str) and item in allowed_resources for item in resources)
 
 
 def _secret_leak_likely(paths: Paths) -> bool:
