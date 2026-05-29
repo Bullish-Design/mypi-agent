@@ -1,19 +1,23 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.piAgent;
+  cfgRootEscaped = lib.escapeShellArg cfg.root;
+  cfgBootstrapModeEscaped = lib.escapeShellArg cfg.bootstrap.mode;
   mypiPkg = pkgs.callPackage ../packages/mypi-agent-cli.nix { };
   mypiBin = pkgs.writeShellScriptBin "mypi" ''
     set -euo pipefail
+    root_rel=${cfgRootEscaped}
     if [ -n "''${DEVENV_ROOT:-}" ]; then
       cd "$DEVENV_ROOT"
     fi
-    export MYPI_AGENT_ROOT="${cfg.root}"
+    export MYPI_AGENT_ROOT="$root_rel"
     exec ${mypiPkg}/bin/mypi "$@"
   '';
   piAgentBin = pkgs.writeShellScriptBin "pi-agent" ''
     set -euo pipefail
+    root_rel=${cfgRootEscaped}
     project_root="''${DEVENV_ROOT:-$PWD}"
-    launcher="$project_root/${cfg.root}/bin/pi-agent"
+    launcher="$project_root/$root_rel/bin/pi-agent"
     if [ ! -x "$launcher" ]; then
       echo "pi-agent is not installed yet; run: mypi sync" >&2
       exit 1
@@ -22,17 +26,18 @@ let
   '';
 
   npmEnvCmd = ''
+    root_rel=${cfgRootEscaped}
     project_root="''${DEVENV_ROOT:-$PWD}"
     export MYPI_PROJECT_ROOT="$project_root"
-    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/${cfg.root}/npm-global"
-    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/${cfg.root}/.npm-cache"
+    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/$root_rel/npm-global"
+    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/$root_rel/.npm-cache"
     export NPM_CONFIG_AUDIT="false"
     export NPM_CONFIG_FUND="false"
   '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
     project_root="''${DEVENV_ROOT:-$PWD}"
-    if [ ! -f "$project_root/.pi/settings.json" ] || [ "${cfg.bootstrap.mode}" = "every_entry" ]; then
+    if [ ! -f "$project_root/.pi/settings.json" ] || [ ${cfgBootstrapModeEscaped} = "every_entry" ]; then
       mypi sync >/dev/null 2>&1 || true
     fi
   '';
