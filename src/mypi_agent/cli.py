@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import typer
 
 from .doctor import run_doctor
 from .models import Paths
-from .runtime import evaluate_runtime_policy
 from .sync import run_sync
 from .surfaces_runtime import build_settings_shim_actor, require_settings_shim_actor
 
@@ -63,13 +64,24 @@ def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
     raise typer.Exit(code=result.exit_code)
 
 
-@app.command("run")
-def run_command() -> None:
+@app.command("agent")
+def agent_command(args: list[str] = typer.Argument(None)) -> None:
     paths = Paths(project_root=Path.cwd())
-    require_settings_shim_actor("MypiCommand", build_settings_shim_actor(paths))
-    result = evaluate_runtime_policy()
-    if result.missing_env_files_warning and result.warning_reason_missing_env_files_only:
-        typer.echo("warning: missing_env_files")
+    require_settings_shim_actor("AgentCommandSurface", build_settings_shim_actor(paths))
+    pi_executable = paths.pi_executable_path
+    if not pi_executable.exists() or not os.access(pi_executable, os.X_OK):
+        typer.echo("error: Pi is not installed. Run: mypi sync")
+        raise typer.Exit(code=1)
+    result = subprocess.run(
+        [str(pi_executable), *(args or [])],
+        check=False,
+    )
+    raise typer.Exit(code=result.returncode)
+
+
+@app.command("pi")
+def pi_command(args: list[str] = typer.Argument(None)) -> None:
+    agent_command(args=args)
 
 
 @app.command("paths")

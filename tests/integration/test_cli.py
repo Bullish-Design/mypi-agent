@@ -58,11 +58,11 @@ def test_cli_doctor_success_after_sync(tmp_path, monkeypatch):
     assert doctor_result.exit_code == 0
 
 
-def test_cli_run_emits_missing_env_warning_only(tmp_path, monkeypatch):
+def test_cli_agent_errors_when_pi_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["run"], catch_exceptions=False)
-    assert result.exit_code == 0
-    assert "warning: missing_env_files" in result.stdout
+    result = runner.invoke(app, ["agent"], catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "error: Pi is not installed. Run: mypi sync" in result.stdout
 
 
 def test_cli_sync_json_and_trigger(tmp_path, monkeypatch):
