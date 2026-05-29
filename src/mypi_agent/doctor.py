@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pydantic import ValidationError
 
 from .base_model import AlliumBase
@@ -56,6 +57,12 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if _secret_leak_likely(paths):
         errors.append("secret_leak_likely")
         diagnostics.append({"code": "secret_leak_likely", "severity": "error"})
+    if shutil.which("node") is None:
+        errors.append("missing_node")
+        diagnostics.append({"code": "missing_node", "severity": "error"})
+    if shutil.which("npm") is None:
+        errors.append("missing_npm")
+        diagnostics.append({"code": "missing_npm", "severity": "error"})
 
     computed_error_count = len(errors)
     exit_code = 1 if computed_error_count > 0 else 0

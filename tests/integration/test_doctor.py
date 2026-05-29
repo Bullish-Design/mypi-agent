@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+
 from mypi_agent.doctor import run_doctor
 from mypi_agent.models import Paths
 from mypi_agent.sync import run_sync
@@ -15,6 +17,13 @@ def test_doctor_reports_missing_artifacts(tmp_path):
     assert result.error_count == len(result.errors)
     assert result.computed_error_count == len(result.errors)
     assert result.exit_code == 1
+
+
+def test_doctor_reports_missing_node_and_npm(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    result = run_doctor(Paths(project_root=tmp_path))
+    assert "missing_node" in result.errors
+    assert "missing_npm" in result.errors
 
 
 def test_doctor_success_after_sync(tmp_path):
