@@ -1,0 +1,32 @@
+-- allium: 3
+
+rule DoctorRunStarted {
+    when: DoctorRequested()
+    ensures: DoctorRun.requested = true
+    ensures: DoctorRun.error_count = 0
+}
+
+rule DoctorPerformsRequiredChecks {
+    when: DoctorRequested()
+    ensures: if not SettingsShim.exists:
+        DoctorError(reason: "missing_settings_shim")
+    ensures: if not AgentRoot.exists:
+        DoctorError(reason: "missing_agent_root")
+    ensures: if not InstalledManifest.valid_json:
+        DoctorError(reason: "invalid_manifest")
+    ensures: if SecretRuntimePolicy.secrets_written_to_generated_config or SecretRuntimePolicy.secrets_available_at_evaluation_time:
+        DoctorError(reason: "secret_leak_likely")
+}
+
+rule DoctorCountsErrors {
+    when: DoctorError(reason)
+    ensures: DoctorRun.error_count = DoctorRun.error_count + 1
+}
+
+rule DoctorExitCodePolicy {
+    when: DoctorRequested()
+    ensures: if DoctorRun.error_count > 0:
+        DoctorRun.exit_code = 1
+    ensures: if DoctorRun.error_count = 0:
+        DoctorRun.exit_code = 0
+}

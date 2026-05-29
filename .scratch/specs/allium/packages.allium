@@ -1,0 +1,6 @@
+-- allium: 3
+
+rule PackagePinsValidated {
+    when: SyncCompleted()
+    ensures: PackagePinsChecked()
+}

@@ -1,0 +1,56 @@
+-- allium: 3
+
+entity SettingsShim {
+    exists: Boolean
+    locally_modified: Boolean
+    points_to_configured_root: Boolean
+}
+
+entity AgentRoot {
+    exists: Boolean
+    required_dirs_present: Boolean
+}
+
+entity InstalledManifest {
+    exists: Boolean
+    valid_json: Boolean
+}
+
+entity SyncRun {
+    explicit: Boolean
+    repair_shim: Boolean
+    completed: Boolean
+    existing_files_overwritten: Boolean
+    advisory_shown: Boolean
+    upgrade_requires_explicit_sync: Boolean
+}
+
+entity SecretRuntimePolicy {
+    runtime_env_load_attempted: Boolean
+    runtime_env_load_completed: Boolean
+    missing_env_files_warning: Boolean
+    secrets_written_to_generated_config: Boolean
+    secrets_available_at_evaluation_time: Boolean
+}
+
+entity DoctorRun {
+    requested: Boolean
+    error_count: Integer
+    exit_code: Integer
+}
+
+invariant RequiredFilesEventuallyMaterialized {
+    AgentRoot.exists implies AgentRoot.required_dirs_present
+}
+
+invariant SyncNonDestructive {
+    not SyncRun.existing_files_overwritten
+}
+
+invariant NoSecretPersistence {
+    not SecretRuntimePolicy.secrets_written_to_generated_config
+}
+
+invariant NoEvalTimeSecrets {
+    not SecretRuntimePolicy.secrets_available_at_evaluation_time
+}

@@ -1,0 +1,58 @@
+-- allium: 3
+
+surface ShellEntrySurface {
+    facing _: SettingsShim
+
+    provides:
+        ShellEntered()
+        DesiredStateChanged()
+}
+
+surface MypiCommand {
+    facing _: SettingsShim
+
+    provides:
+        MypiInvoked()
+
+    exposes:
+        SecretRuntimePolicy.runtime_env_load_attempted
+        SecretRuntimePolicy.runtime_env_load_completed
+        SecretRuntimePolicy.missing_env_files_warning
+
+    @guarantee Passthrough
+        -- The wrapper delegates to Pi CLI and preserves arguments and exit behavior.
+}
+
+surface SyncCommandSurface {
+    facing _: SettingsShim
+
+    provides:
+        SyncRequested(explicit: true, repair_shim: false)
+        SyncRequested(explicit: true, repair_shim: true)
+
+    exposes:
+        SyncRun.explicit
+        SyncRun.repair_shim
+        SyncRun.completed
+        SyncRun.existing_files_overwritten
+        SyncRun.advisory_shown
+        SyncRun.upgrade_requires_explicit_sync
+        InstalledManifest.exists
+        InstalledManifest.valid_json
+        SettingsShim.points_to_configured_root
+
+    @guarantee NonDestructiveDefault
+        -- Default sync creates missing files and preserves existing user edits.
+}
+
+surface DoctorCommandSurface {
+    facing _: SettingsShim
+
+    provides:
+        DoctorRequested()
+
+    exposes:
+        DoctorRun.requested
+        DoctorRun.error_count
+        DoctorRun.exit_code
+}
