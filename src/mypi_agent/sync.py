@@ -217,11 +217,22 @@ def _config_hash(paths: Paths) -> str:
 
 
 def needs_sync(paths: Paths) -> bool:
-    if not paths.agent_root.exists() or not paths.settings_path.exists() or not paths.manifest_path.exists():
+    if not paths.agent_root.exists():
+        return True
+    if not paths.settings_path.exists():
+        return True
+    if not paths.manifest_path.exists():
+        return True
+    if not _pi_installed(paths):
         return True
     bootstrap = _read_json_or_none(paths.bootstrap_state_path)
     if not isinstance(bootstrap, dict):
         return True
+    if bootstrap.get("status") != "completed":
+        return True
+    for resource_dir in RESOURCE_DIRS:
+        if not (paths.agent_root / resource_dir).exists():
+            return True
     return bootstrap.get("config_hash") != _config_hash(paths)
 
 
