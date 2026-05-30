@@ -165,6 +165,16 @@ def test_repair_shim_bypasses_user_owned_settings_gate(tmp_path):
     assert result.completed is True
 
 
+def test_diff_mode_bypasses_user_owned_settings_gate(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    paths.settings_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.settings_path.write_text('{"customKey":"value"}\n', encoding="utf-8")
+    result = run_sync(paths, explicit=True, repair_shim=False, diff_requested=True)
+    assert result.diff_requested is True
+    assert result.created == []
+    assert result.write_actions == []
+
+
 def test_advisory_gated_on_hash_input_change(tmp_path):
     paths = Paths(project_root=tmp_path)
     first = run_sync(paths, explicit=True, repair_shim=False)
