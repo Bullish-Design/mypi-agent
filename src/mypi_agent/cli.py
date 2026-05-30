@@ -73,8 +73,11 @@ def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
     raise typer.Exit(code=result.exit_code)
 
 
-@app.command("agent")
-def agent_command(args: list[str] = typer.Argument(None)) -> None:
+@app.command(
+    "agent",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def agent_command(ctx: typer.Context) -> None:
     paths = _resolve_paths()
     require_settings_shim_actor("AgentCommandSurface", build_settings_shim_actor(paths))
     pi_executable = paths.pi_executable_path
@@ -82,15 +85,28 @@ def agent_command(args: list[str] = typer.Argument(None)) -> None:
         typer.echo("error: Pi is not installed. Run: mypi sync")
         raise typer.Exit(code=1)
     result = subprocess.run(
-        [str(pi_executable), *(args or [])],
+        [str(pi_executable), *ctx.args],
         check=False,
     )
     raise typer.Exit(code=result.returncode)
 
 
-@app.command("pi")
-def pi_command(args: list[str] = typer.Argument(None)) -> None:
-    agent_command(args=args)
+@app.command(
+    "pi",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def pi_command(ctx: typer.Context) -> None:
+    paths = _resolve_paths()
+    require_settings_shim_actor("PiCommandSurface", build_settings_shim_actor(paths))
+    pi_executable = paths.pi_executable_path
+    if not pi_executable.exists() or not os.access(pi_executable, os.X_OK):
+        typer.echo("error: Pi is not installed. Run: mypi sync")
+        raise typer.Exit(code=1)
+    result = subprocess.run(
+        [str(pi_executable), *ctx.args],
+        check=False,
+    )
+    raise typer.Exit(code=result.returncode)
 
 
 @app.command("paths")
