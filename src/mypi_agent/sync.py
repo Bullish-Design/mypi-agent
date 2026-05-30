@@ -204,6 +204,7 @@ def build_config_hash_inputs(paths: Paths) -> dict[str, object]:
         "pi_agent_root": os.environ.get("MYPI_AGENT_ROOT", ".agents/pi"),
         "pi_package_name": os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent"),
         "pi_package_version": os.environ.get("MYPI_PI_PACKAGE_VERSION", "") or None,
+        "allow_floating_pi_version": os.environ.get("MYPI_ALLOW_FLOATING_PI_VERSION", "").strip().lower() in {"1", "true", "yes"},
         "npm_install_flags": _load_npm_install_flags(),
         "settings_schema_version": SETTINGS_SCHEMA_VERSION,
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
@@ -248,13 +249,16 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
     if not diff_requested:
         npm = shutil.which("npm")
         pi_package_version = os.environ.get("MYPI_PI_PACKAGE_VERSION", "").strip() or None
+        allow_floating = os.environ.get("MYPI_ALLOW_FLOATING_PI_VERSION", "").strip().lower() in {"1", "true", "yes"}
+        if pi_package_version is None and not allow_floating:
+            raise RuntimeError(
+                "error: pi package version is not pinned; set MYPI_PI_PACKAGE_VERSION or enable MYPI_ALLOW_FLOATING_PI_VERSION=true"
+            )
         npm_install_flags = _load_npm_install_flags()
         if npm is None:
             warnings.append("pi_agent_install_skipped_no_npm")
         else:
             install_target = pi_package_name if pi_package_version is None else f"{pi_package_name}@{pi_package_version}"
-            if pi_package_version is None:
-                warnings.append("pi_package_version_unset_for_pinned_npm")
             install = subprocess.run(
                 [npm, "install", "--prefix", str(paths.agent_root), *npm_install_flags, install_target],
                 text=True,

@@ -9,6 +9,8 @@ from pathlib import Path
 from mypi_agent.models import Paths
 from mypi_agent.sync import run_sync
 
+os.environ.setdefault("MYPI_PI_PACKAGE_VERSION", "1.2.3")
+
 
 def _tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
@@ -232,3 +234,33 @@ def test_failed_install_writes_failed_bootstrap_state(tmp_path, monkeypatch):
     assert bootstrap["status"] == "failed"
     assert bootstrap["pi_installed"] is False
     assert bootstrap["last_error"] == "pi_install_failed"
+
+
+def test_sync_rejects_floating_version_without_opt_in(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.delenv("MYPI_PI_PACKAGE_VERSION", raising=False)
+    monkeypatch.delenv("MYPI_ALLOW_FLOATING_PI_VERSION", raising=False)
+    try:
+        run_sync(paths, explicit=True, repair_shim=False)
+        assert False, "expected RuntimeError when floating version is not opted in"
+    except RuntimeError as exc:
+        assert "pi package version is not pinned" in str(exc)
+
+
+def test_sync_allows_floating_version_with_opt_in(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.delenv("MYPI_PI_PACKAGE_VERSION", raising=False)
+    monkeypatch.setenv("MYPI_ALLOW_FLOATING_PI_VERSION", "true")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+    run_sync(paths, explicit=True, repair_shim=False)
+    npm_installs = [cmd for cmd in captured if len(cmd) > 1 and cmd[0] == "/usr/bin/npm" and cmd[1] == "install"]
+    assert npm_installs
+    assert npm_installs[0][-1] == "@earendil-works/pi-coding-agent"

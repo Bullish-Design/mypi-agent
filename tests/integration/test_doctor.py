@@ -7,6 +7,8 @@ from mypi_agent.doctor import run_doctor
 from mypi_agent.models import Paths
 from mypi_agent.sync import run_sync
 
+os.environ.setdefault("MYPI_PI_PACKAGE_VERSION", "1.2.3")
+
 
 def test_doctor_reports_missing_artifacts(tmp_path):
     result = run_doctor(Paths(project_root=tmp_path))

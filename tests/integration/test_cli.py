@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 
 from typer.testing import CliRunner
 
 from mypi_agent.cli import app
 
 runner = CliRunner()
+os.environ.setdefault("MYPI_PI_PACKAGE_VERSION", "1.2.3")
 
 
 def test_cli_sync_creates_required_layout(tmp_path, monkeypatch):

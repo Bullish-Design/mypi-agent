@@ -16,6 +16,7 @@ let
     export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
     export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
     export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
+    export MYPI_ALLOW_FLOATING_PI_VERSION=${lib.boolToString cfg.allowFloatingPiVersion}
     if [ -n "''${DEVENV_ROOT:-}" ]; then
       cd "$DEVENV_ROOT"
     fi
@@ -33,6 +34,7 @@ let
     export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
     export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
     export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
+    export MYPI_ALLOW_FLOATING_PI_VERSION=${lib.boolToString cfg.allowFloatingPiVersion}
   '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
@@ -67,14 +69,20 @@ in
 
     piPackageVersion = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Pinned Pi package version. Required for reproducible pinned installs.";
+      default = "1.2.3";
+      description = "Pinned Pi package version for reproducible installs.";
     };
 
     npmInstallFlags = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
       description = "Additional flags passed to npm install for Pi package installation.";
+    };
+
+    allowFloatingPiVersion = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Allow floating (unpinned) Pi package version. Set to true to use latest from npm.";
     };
 
     bootstrap.mode = lib.mkOption {
