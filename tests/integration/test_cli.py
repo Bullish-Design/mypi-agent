@@ -61,7 +61,7 @@ def test_cli_doctor_reports_errors_and_exit_code(tmp_path, monkeypatch):
     assert "error: missing_settings_shim" in result.stdout
 
 
-def test_cli_doctor_success_after_sync(tmp_path, monkeypatch):
+def test_cli_doctor_success_after_sync(tmp_path, monkeypatch, fake_npm):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)
@@ -96,7 +96,7 @@ def test_cli_sync_diff_prints_counts(tmp_path, monkeypatch):
     assert "diff: create=" in result.stdout
 
 
-def test_cli_doctor_json(tmp_path, monkeypatch):
+def test_cli_doctor_json(tmp_path, monkeypatch, fake_npm):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)

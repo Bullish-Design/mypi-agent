@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from mypi_agent.models import Paths
-from mypi_agent.sync import run_sync
+from mypi_agent.sync import needs_sync, run_sync
 
 os.environ.setdefault("MYPI_PI_PACKAGE_VERSION", "1.2.3")
 
@@ -185,37 +185,11 @@ def test_advisory_gated_on_hash_input_change(tmp_path):
     assert second.advisory_shown is False
 
 
-def test_sync_installs_pi_agent_with_fake_npm(tmp_path, monkeypatch):
+def test_sync_installs_pi_with_fake_npm(tmp_path, fake_npm):
     paths = Paths(project_root=tmp_path)
-    fake_bin = tmp_path / "fake-bin"
-    fake_bin.mkdir(parents=True, exist_ok=True)
-    npm = fake_bin / "npm"
-    npm.write_text(
-        "#!/usr/bin/env sh\n"
-        "set -eu\n"
-        "prefix=\n"
-        "while [ \"$#\" -gt 0 ]; do\n"
-        "  if [ \"$1\" = \"--prefix\" ]; then\n"
-        "    shift\n"
-        "    prefix=\"$1\"\n"
-        "  fi\n"
-        "  shift\n"
-        "done\n"
-        "mkdir -p \"$prefix/node_modules/.bin\"\n"
-        "cat > \"$prefix/node_modules/.bin/pi\" <<'EOF'\n"
-        "#!/usr/bin/env sh\n"
-        "echo pi\n"
-        "EOF\n"
-        "chmod +x \"$prefix/node_modules/.bin/pi\"\n",
-        encoding="utf-8",
-    )
-    npm.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
-
     result = run_sync(paths, explicit=True, repair_shim=False)
-    pi_executable = paths.agent_root / "node_modules" / ".bin" / "pi"
     assert result.pi_installed is True
-    assert pi_executable.exists()
+    assert paths.pi_executable_path.exists()
     bootstrap = json.loads(paths.bootstrap_state_path.read_text(encoding="utf-8"))
     assert bootstrap["status"] == "completed"
     assert bootstrap["pi_installed"] is True
@@ -293,3 +267,21 @@ def test_sync_allows_floating_version_with_opt_in(tmp_path, monkeypatch):
     npm_installs = [cmd for cmd in captured if len(cmd) > 1 and cmd[0] == "/usr/bin/npm" and cmd[1] == "install"]
     assert npm_installs
     assert npm_installs[0][-1] == "@earendil-works/pi-coding-agent"
+
+
+def test_needs_sync_true_when_pi_binary_missing(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    run_sync(paths, explicit=True, repair_shim=False)
+    assert needs_sync(paths) is True
+
+
+def test_needs_sync_true_when_bootstrap_failed(tmp_path, fake_npm_failing):
+    paths = Paths(project_root=tmp_path)
+    run_sync(paths, explicit=True, repair_shim=False)
+    assert needs_sync(paths) is True
+
+
+def test_needs_sync_false_when_fully_bootstrapped(tmp_path, fake_npm):
+    paths = Paths(project_root=tmp_path)
+    run_sync(paths, explicit=True, repair_shim=False)
+    assert needs_sync(paths) is False

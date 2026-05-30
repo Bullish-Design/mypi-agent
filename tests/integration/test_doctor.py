@@ -30,7 +30,7 @@ def test_doctor_reports_missing_node_and_npm(tmp_path, monkeypatch):
     assert "missing_npm" in result.errors
 
 
-def test_doctor_success_after_sync(tmp_path, monkeypatch):
+def test_doctor_success_after_sync(tmp_path, monkeypatch, fake_npm):
     paths = Paths(project_root=tmp_path)
     monkeypatch.setenv("NPM_CONFIG_PREFIX", str(paths.agent_root / "npm-global"))
     run_sync(paths, explicit=True, repair_shim=False)
