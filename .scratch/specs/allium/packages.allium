@@ -3,6 +3,7 @@
 -- Package provisioning specification.
 -- R-004: Module must provide npm-capable runtime tooling.
 -- R-005: npm install behavior must be deterministic or explicitly declared.
+-- P0.4: Pinned version by default for reproducibility.
 
 use "./core.allium" as core
 
@@ -17,16 +18,19 @@ entity PiPackage {
     name: String
     version: String?
     install_strategy: nix_packaged | pinned_npm | floating_npm
-    npm_install_flags: List<String>
+    npm_install_flags: Set<String>
     installed_version: String when PiExecutable.installed
     installed_integrity_hash: String when PiExecutable.installed
 }
 
-Given PiPackage {
+-- P0.4: Default is pinned_npm with a concrete version.
+-- Floating installs require explicit opt-in via allowFloatingPiVersion.
+
+default PiPackage pi_package = {
     name: "@earendil-works/pi-coding-agent"
     version: null
     install_strategy: pinned_npm
-    npm_install_flags: ["--ignore-scripts", "--no-audit", "--no-fund"]
+    npm_install_flags: {"--ignore-scripts", "--no-audit", "--no-fund"}
 }
 
 surface LocalPackageTriggers {
@@ -34,6 +38,8 @@ surface LocalPackageTriggers {
 
     provides:
         SyncCompleted()
+        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
+        ShellEntered()
 }
 
 -- R-005: Version pinning validation
@@ -51,9 +57,25 @@ rule PackagePinsValidated {
         --   "${piPackageName}@${piPackageVersion}"
 }
 
+-- P0.4: Floating installs require explicit opt-in.
+
+rule FloatingInstallRequiresOptIn {
+    when: SyncRequested(explicit: true, _, _, _)
+    requires: PiPackage.version = null
+    ensures: if ModuleOptions.allow_floating_pi_version:
+        PiPackage.install_strategy = floating_npm
+    ensures: if not ModuleOptions.allow_floating_pi_version:
+        SyncError(reason: "pi_version_required")
+    @guidance
+        -- When piPackageVersion is null and allowFloatingPiVersion is false:
+        -- Print: "error: piAgent.piPackageVersion must be set for reproducible installs."
+        -- Print: "Set piAgent.allowFloatingPiVersion = true to use latest."
+        -- Exit with code 1.
+}
+
 rule PackageInstallRecordedInManifest {
     when: SyncCompleted()
-    requires: PiExecutable.installed
+    requires: core/PiExecutable.installed
     ensures: Manifest.pi_package = PiPackage.name
     ensures: Manifest.pi_version = PiPackage.installed_version
     @guidance
@@ -66,9 +88,9 @@ rule PackageInstallRecordedInManifest {
 rule NixPackagedPiAvailable {
     when: ShellEntered()
     requires: PiPackage.install_strategy = nix_packaged
-    ensures: PiExecutable.installed = true
-    ensures: PiExecutable.path_exists = true
-    ensures: PiExecutable.is_executable = true
+    ensures: core/PiExecutable.installed = true
+    ensures: core/PiExecutable.path_exists = true
+    ensures: core/PiExecutable.is_executable = true
     @guidance
         -- When install_strategy is nix_packaged, Pi is provided
         -- as a Nix derivation through packages/pi-coding-agent.nix.
@@ -85,7 +107,9 @@ invariant PinnedNpmRequiresVersion {
 }
 
 invariant FloatingNpmIsExplicit {
-    -- Floating versions must be an explicit choice, not an accident
+    -- P0.4: Floating versions must be an explicit choice, not an accident.
+    -- allowFloatingPiVersion must be true for floating installs.
     PiPackage.install_strategy = floating_npm implies
         PiPackage.version = null
+        and ModuleOptions.allow_floating_pi_version
 }

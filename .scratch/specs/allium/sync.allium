@@ -6,18 +6,23 @@
 -- R-012: Sync must truthfully report overwrites.
 -- R-021: Shell bootstrap must not silently swallow failures.
 -- R-024: Use atomic writes.
+-- P0.3: Bootstrap must not mark completed on failed installs.
+-- P0.5: User-owned settings must not be adopted without --repair-shim.
+-- P1.1: Generate npmCommand in .pi/settings.json.
+-- P1.2: Add sync locking.
 
 use "./core.allium" as core
 
 entity SettingsMergePolicy {
-    managed_keys: List<String>
+    managed_keys: Set<String>
     marker_key: String
     marker_schema_version: Integer
     user_keys_preserved: Boolean
 }
 
-Given SettingsMergePolicy {
-    managed_keys: ["extensions", "skills", "prompts", "themes", "enableSkillCommands"]
+default SettingsMergePolicy merge_policy = {
+    -- P1.1: npmCommand added to managed keys
+    managed_keys: {"extensions", "skills", "prompts", "themes", "enableSkillCommands", "npmCommand"}
     marker_key: "x-mypi-agent"
     marker_schema_version: 1
 }
@@ -32,6 +37,18 @@ surface LocalSyncTriggers {
         SyncRequested(explicit: true, repair_shim: true, diff_requested: false, trigger: manual)
         SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)
         SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
+}
+
+-- P1.2: Acquire sync lock before any mutation
+
+rule SyncAcquireLock {
+    when: SyncRequested(_, _, diff_requested: false, _)
+    ensures: SyncLock.held = true
+    @guidance
+        -- Create .agents/pi/.state/sync.lock
+        -- Use fcntl.flock() on Unix.
+        -- Hold the lock across npm install and state writes.
+        -- Use unique temp files for JSON writes (NamedTemporaryFile).
 }
 
 -- R-010: Diff mode builds plan but does not write
@@ -75,12 +92,26 @@ rule SyncManifestHeal {
     ensures: SyncRun.manifest_healed = true
 }
 
+-- P0.5: Settings takeover safety.
+-- User-owned or invalid settings must not be adopted without --repair-shim.
+
+rule SyncRejectsUserOwnedSettings {
+    when: SyncRequested(explicit: true, repair_shim: false, diff_requested: false, _)
+    requires: core/SettingsShim.exists and core/SettingsShim.classification in {user_owned, invalid_json}
+    ensures: SyncError(reason: "settings_not_mypi_managed")
+    @guidance
+        -- Print: "error: .pi/settings.json already exists and is not MYPI-managed."
+        -- Print: "Run `mypi sync --repair-shim` to adopt/repair the settings shim."
+        -- Exit with code 1.
+        -- Do not rewrite the settings file.
+}
+
 -- R-011: Settings shim update merges managed keys, preserves user keys
 
 rule SyncShimMerge {
     when: SyncRequested(explicit: true, repair_shim: true, diff_requested: false, trigger)
-    ensures: SettingsShim.points_to_configured_root = true
-    ensures: SettingsShim.marker_present = true
+    ensures: core/SettingsShim.points_to_configured_root = true
+    ensures: core/SettingsShim.marker_present = true
     ensures: SettingsMergePolicy.user_keys_preserved = true
     ensures: SyncRun.shim_updated = true
     @guidance
@@ -92,25 +123,74 @@ rule SyncShimMerge {
         --   managed: true
         --   schemaVersion: 1
         --   agentRoot: relative path to .agents/pi
-        --   managedKeys: list of managed key names
+        --   managedKeys: list of managed key names (includes npmCommand)
         -- Use atomic write (write to temp file, fsync, rename).
+}
+
+-- P1.1: Generate npmCommand in settings
+
+rule SyncGeneratesNpmCommand {
+    when: SyncRequested(explicit: true, _, diff_requested: false, _)
+    ensures: core/SettingsShim.npm_command_configured = true
+    @guidance
+        -- Generate npmCommand pointing to devenv-provided npm.
+        -- Either use the absolute Nix store path to npm:
+        --   "npmCommand": ["/nix/store/...-nodejs-22/bin/npm"]
+        -- Or generate a small npm wrapper under the agent root:
+        --   "npmCommand": ["../.agents/pi/bin/npm"]
+        -- Add npmCommand to MANAGED_SETTINGS_KEYS.
 }
 
 -- Pi installation via npm
 
 rule SyncInstallPi {
     when: SyncRequested(explicit: true, _, diff_requested: false, _)
-    requires: not PiExecutable.installed
-    requires: NodeRuntime.node_available and NodeRuntime.npm_available
-    ensures: PiExecutable.installed = true
-    ensures: PiExecutable.path_exists = true
-    ensures: PiExecutable.is_executable = true
+    requires: not core/PiExecutable.installed
+    requires: core/NodeRuntime.node_available and core/NodeRuntime.npm_available
+    ensures: core/PiExecutable.installed = true
+    ensures: core/PiExecutable.path_exists = true
+    ensures: core/PiExecutable.is_executable = true
     @guidance
         -- Install Pi via npm with pinned version:
         -- npm install --prefix "$MYPI_AGENT_ROOT" \
         --   --ignore-scripts --no-audit --no-fund \
         --   "@earendil-works/pi-coding-agent@<pinned-version>"
         -- Use repo-scoped npm configuration (NPM_CONFIG_PREFIX, NPM_CONFIG_CACHE).
+        -- P0.1: After install, verify that node_modules/.bin/pi exists
+        -- and is executable. Do NOT generate a wrapper at bin/pi-agent.
+}
+
+-- P0.3: Verify pi binary after install, write bootstrap state accordingly.
+
+rule SyncVerifyPiInstalled {
+    when: SyncCompleted()
+    ensures: if core/PiExecutable.path_exists and core/PiExecutable.is_executable:
+        core/BootstrapState.status = completed
+        core/BootstrapState.pi_installed = true
+        core/BootstrapState.pi_executable = ".agents/pi/node_modules/.bin/pi"
+        core/BootstrapState.last_error = null
+        core/SyncRun.pi_installed = true
+    ensures: if not core/PiExecutable.path_exists or not core/PiExecutable.is_executable:
+        core/BootstrapState.status = failed
+        core/BootstrapState.pi_installed = false
+        core/BootstrapState.last_error = "pi_install_failed"
+        core/SyncRun.pi_installed = false
+    @guidance
+        -- After npm install completes, check:
+        -- 1. paths.agent_root / "node_modules" / ".bin" / "pi" exists
+        -- 2. os.access(pi_path, os.X_OK) is true
+        -- Only then write status = "completed" to bootstrap state.
+        -- On failure, write status = "failed" so needs_sync retries.
+}
+
+rule SyncRecordsBootstrapState {
+    when: SyncCompleted()
+    ensures: core/BootstrapState.trigger = core/SyncRun.trigger
+    ensures: core/BootstrapState.config_hash = core/DesiredState.config_hash
+    ensures: core/BootstrapState.package_name = core/PiPackage.name
+    ensures: core/BootstrapState.schema_version = 1
+    ensures: if core/PiExecutable.installed:
+        core/BootstrapState.package_version = core/PiExecutable.installed_version
 }
 
 -- R-012: Finalize with truthful overwrite reporting
@@ -130,7 +210,7 @@ rule SyncFinalize {
 
 rule ShellBootstrapSync {
     when: ShellEntered()
-    requires: NeedsSyncResult.sync_needed
+    requires: core/NeedsSyncResult.sync_needed
     ensures: SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
     @guidance
         -- In the Nix enterShell hook:
@@ -147,15 +227,21 @@ rule ManualUpgradePosture {
     ensures: SyncRun.upgrade_requires_explicit_sync = true
 }
 
+-- P1.2: Release sync lock after completion
+
+rule SyncReleaseLock {
+    when: SyncCompleted()
+    ensures: SyncLock.held = false
+    @guidance
+        -- Release fcntl.flock() after all state writes are done.
+        -- Lock is released even on failure (use try/finally).
+}
+
 -- R-024: Atomic writes
 
 invariant AtomicWritePolicy {
     for action in SyncRun.write_actions where action.managed:
         AtomicWriteUsed(action.path)
-    @guidance
-        -- Write to temporary file in same directory.
-        -- fsync if appropriate.
-        -- Rename into place.
 }
 
 invariant NoOverwriteByDefault {
@@ -165,4 +251,16 @@ invariant NoOverwriteByDefault {
 invariant SettingsMergePreservesUserKeys {
     -- R-011: user-owned keys are never deleted or modified by sync
     SyncRun.shim_updated implies SettingsMergePolicy.user_keys_preserved
+}
+
+-- P0.5: User-owned settings are never silently adopted.
+
+invariant UserOwnedSettingsRequireRepairShim {
+    SettingsShim.classification = user_owned and not SyncRun.repair_shim
+        implies not SyncRun.shim_updated
+}
+
+invariant InvalidJsonSettingsRequireRepairShim {
+    SettingsShim.classification = invalid_json and not SyncRun.repair_shim
+        implies not SyncRun.shim_updated
 }

@@ -17,7 +17,7 @@ How to use:
 |---|---|---|---|---|---|
 | SA-1 | High | v1 interaction mode is interactive developer shell via `devenv shell`. | Interactive only | Matches concept goals and phased rollout. | Accepted |
 | SA-2 | Medium | CI/headless behavior is out of scope in v1 but command semantics should not preclude it. | Deferred | Prevents over-design while preserving forward path. | Accepted |
-| SA-3 | Medium | Primary actors: `Developer`, `DevenvShell`, `SyncCommand`, `DoctorCommand`, `PiCLI`. | Use these actors in specs/docs | Keeps behavior modeling concrete. | Open |
+| SA-3 | Medium | Primary actors: `Developer`, `DevenvShell`, `SyncCommand`, `DoctorCommand`, `PiCLI`. | Use these actors in specs/docs | Keeps behavior modeling concrete. | Accepted |
 | SA-4 | Low | Multi-user concurrent edits are not explicitly coordinated in v1. | Best-effort file safety only | Local-dev target; avoid lock complexity initially. | Accepted |
 
 ## 2) Bootstrap and Sync Semantics
@@ -87,9 +87,9 @@ How to use:
 
 | ID | Priority | Decision | Default | Rationale | Status |
 |---|---|---|---|---|---|
-| CL-1 | High | Wrapper command naming. | `mypi` | Matches concept recommendation. | Changed |
-| CL-2 | Medium | Keep native `pi` untouched if present. | Yes | Avoid surprising global behavior. | Accepted |
-| CL-3 | Medium | `mypi` passthrough behavior and exit code fidelity. | Exact passthrough | Keeps user mental model simple. | Changed |
+| CL-1 | High | Wrapper command naming. | `mypi` for control plane; `pi` exposed directly from project-local npm install | Matches code review recommendation. Two command surfaces: mypi (sync/doctor/paths) and pi (upstream CLI). | Changed |
+| CL-2 | Medium | Keep native `pi` untouched if present. | Yes, project-local pi shadows global only inside devenv shell | Avoid surprising global behavior. | Changed |
+| CL-3 | Medium | `mypi pi` passthrough behavior and exit code fidelity. | Exact passthrough with allow_extra_args and ignore_unknown_options | Must forward all upstream flags including --version, --mode, -p. | Changed |
 | CL-4 | Medium | Standard shell entry messages and quiet mode. | Brief status line | Improves discoverability without noise. | Accepted |
 
 ## 9) Git and File Lifecycle
@@ -115,7 +115,7 @@ How to use:
 
 | ID | Priority | Question | Proposed Initial Answer | Status |
 |---|---|---|---|---|
-| OQ-1 | High | Exact Pi CLI executable packaging method for current version? | Use wrapper `mypi`; leave `pi` untouched | Changed |
+| OQ-1 | High | Exact Pi CLI executable packaging method for current version? | Expose upstream `pi` directly from project-local node_modules/.bin/pi on PATH. `mypi` is the MYPI control plane only. No `pi-agent` wrapper generated. | Changed |
 | OQ-2 | High | Exact accepted Pi settings schema for models and path fields? | Verify against current Pi docs before coding | Accepted |
 | OQ-3 | High | Should shim auto-repair when stale and unedited? | No auto-repair; explicit `--repair-shim` | Accepted |
 | OQ-4 | High | Should package installation be delegated to Pi or pre-resolved by module? | Delegate to Pi in v1 | Accepted |

@@ -9,20 +9,27 @@ use "./core.allium" as core
 
 entity Manifest {
     schema_version: Integer
-    resources: List<String>
+    resources: Set<String>
     pi_package: String
     pi_version: String?
     node_version: String?
     generated_by: String
 }
 
-Given Manifest {
+default Manifest manifest = {
     schema_version: 1
-    resources: ["extensions", "skills", "prompts", "themes"]
+    resources: {"extensions", "skills", "prompts", "themes"}
     pi_package: "@earendil-works/pi-coding-agent"
     pi_version: null
     node_version: null
     generated_by: "mypi-agent"
+}
+
+surface ManifestLocalTriggers {
+    facing _: Manifest
+
+    provides:
+        SyncCompleted()
 }
 
 -- Manifest validation rules
@@ -48,10 +55,10 @@ rule ManifestSchemaValidation {
 
 rule ManifestRecordsPiVersion {
     when: SyncCompleted()
-    requires: PiExecutable.installed
-    ensures: Manifest.pi_version = PiPackage.installed_version
-    ensures: if NodeRuntime.node_available:
-        Manifest.node_version = NodeRuntime.node_version
+    requires: core/PiExecutable.installed
+    ensures: Manifest.pi_version = core/PiPackage.installed_version
+    ensures: if core/NodeRuntime.node_available:
+        Manifest.node_version = core/NodeRuntime.node_version
 }
 
 -- R-014: Manifest resources must be from the known set

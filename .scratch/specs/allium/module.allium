@@ -3,6 +3,7 @@
 -- Public import surface contract for mypi-agent.
 -- Defines how downstream devenv-managed projects consume this library
 -- and enforces isolation between the public module and private development environment.
+-- P0.1: Consumer gets upstream pi on PATH, not a pi-agent wrapper.
 
 use "./core.allium" as core
 
@@ -29,10 +30,12 @@ entity PrivateDevelopmentEnv {
 }
 
 -- A downstream consumer project that imports mypi-agent.
+-- P0.1: has_pi_on_path replaces any pi-agent shim concept.
 
 entity ConsumerProject {
     has_devenv_yaml_import: Boolean
     has_mypi_on_path: Boolean
+    has_pi_on_path: Boolean
     has_node_on_path: Boolean
     has_npm_on_path: Boolean
     has_pi_agent_root: Boolean
@@ -41,11 +44,19 @@ entity ConsumerProject {
     requires_allium_env_input: Boolean
 }
 
+surface ModuleLocalTriggers {
+    facing _: ConsumerProject
+
+    provides:
+        ShellEntered()
+}
+
 surface DevenvImportSurface {
     facing consumer: ConsumerProject
 
     exposes:
         consumer.has_mypi_on_path
+        consumer.has_pi_on_path
         consumer.has_node_on_path
         consumer.has_npm_on_path
         consumer.has_pi_agent_root
@@ -60,6 +71,11 @@ surface DevenvImportSurface {
     @guarantee AlliumFreeConsumer
         -- A consumer importing mypi-agent never evaluates allium.enable,
         -- allium.specsDir, allium.codexSkills, or any allium-env option.
+
+    @guarantee DirectUpstreamPi
+        -- P0.1: The consumer gets the upstream pi binary on PATH via
+        -- .agents/pi/node_modules/.bin being added to PATH.
+        -- No pi-agent wrapper is generated or exposed by default.
 }
 
 -- R-001: Root import must expose modules/pi-agent.nix
@@ -68,6 +84,7 @@ rule RootImportExposesModule {
     when: ConsumerProject.has_devenv_yaml_import = true
     ensures: PublicImportSurface.exposes_pi_agent_module = true
     ensures: ConsumerProject.has_mypi_on_path = true
+    ensures: ConsumerProject.has_pi_on_path = true
     ensures: ConsumerProject.has_node_on_path = true
     ensures: ConsumerProject.has_npm_on_path = true
     ensures: ConsumerProject.has_pi_agent_root = true
@@ -104,4 +121,11 @@ invariant PublicSurfaceIsMinimal {
 
 invariant PrivateDevEnvIsIsolated {
     PrivateDevelopmentEnv.isolated_from_public_surface
+}
+
+-- P0.1: Consumer gets pi directly on PATH after sync.
+
+invariant ConsumerGetsPiOnPath {
+    ConsumerProject.has_devenv_yaml_import and ConsumerProject.has_pi_agent_root
+        implies ConsumerProject.has_pi_on_path
 }

@@ -3,6 +3,9 @@
 -- Health check specification for mypi doctor.
 -- R-007: Pi executable must be verified by doctor.
 -- Doctor must fail when Pi is missing or unusable.
+-- P0.1: Pi path points to node_modules/.bin/pi, not bin/pi-agent.
+-- P1.5: Strengthen doctor with version match, npmCommand, bootstrap status.
+-- P2.3: Rename pi_agent_* error reasons to pi_*.
 
 use "./core.allium" as core
 
@@ -10,8 +13,17 @@ entity DoctorRun {
     requested: Boolean
     checks_completed: Boolean
     error_count: Integer
+    warning_count: Integer
     computed_error_count: Integer
+    computed_warning_count: Integer
     exit_code: Integer
+}
+
+-- P1.5: Separate warnings from errors.
+
+entity Diagnostic {
+    severity: error | warning | info
+    reason: String
 }
 
 surface LocalDoctorTriggers {
@@ -19,6 +31,8 @@ surface LocalDoctorTriggers {
 
     provides:
         DoctorRequested()
+
+        -- Errors
         DoctorError(reason: "missing_settings_shim")
         DoctorError(reason: "missing_agent_root")
         DoctorError(reason: "invalid_manifest")
@@ -26,11 +40,19 @@ surface LocalDoctorTriggers {
         DoctorError(reason: "secret_leak_likely")
         DoctorError(reason: "missing_node")
         DoctorError(reason: "missing_npm")
-        DoctorError(reason: "missing_pi_agent_executable")
-        DoctorError(reason: "pi_agent_executable_not_executable")
-        DoctorError(reason: "pi_agent_version_check_failed")
+        DoctorError(reason: "missing_pi_executable")
+        DoctorError(reason: "pi_executable_not_executable")
+        DoctorError(reason: "pi_version_check_failed")
         DoctorError(reason: "npm_scope_not_project_local")
         DoctorError(reason: "settings_shim_not_pointing_to_configured_root")
+        DoctorError(reason: "bootstrap_not_completed")
+        DoctorError(reason: "settings_not_mypi_managed")
+
+        -- Warnings
+        DoctorWarning(reason: "floating_pi_version")
+        DoctorWarning(reason: "pi_version_mismatch")
+        DoctorWarning(reason: "missing_npm_command_in_settings")
+        DoctorWarning(reason: "missing_resource_directory")
 }
 
 rule DoctorRunStarted {
@@ -38,7 +60,9 @@ rule DoctorRunStarted {
     ensures: DoctorRun.requested = true
     ensures: DoctorRun.checks_completed = false
     ensures: DoctorRun.error_count = 0
+    ensures: DoctorRun.warning_count = 0
     ensures: DoctorRun.computed_error_count = 0
+    ensures: DoctorRun.computed_warning_count = 0
 }
 
 rule DoctorPerformsRequiredChecks {
@@ -62,13 +86,13 @@ rule DoctorPerformsRequiredChecks {
     ensures: if not NodeRuntime.npm_available:
         DoctorError(reason: "missing_npm")
 
-    -- R-007: Pi executable checks
+    -- R-007 + P0.1: Pi executable checks (upstream path)
     ensures: if not PiExecutable.path_exists:
-        DoctorError(reason: "missing_pi_agent_executable")
+        DoctorError(reason: "missing_pi_executable")
     ensures: if PiExecutable.path_exists and not PiExecutable.is_executable:
-        DoctorError(reason: "pi_agent_executable_not_executable")
+        DoctorError(reason: "pi_executable_not_executable")
     ensures: if PiExecutable.path_exists and PiExecutable.is_executable and not PiExecutable.version_check_passed:
-        DoctorError(reason: "pi_agent_version_check_failed")
+        DoctorError(reason: "pi_version_check_failed")
 
     -- npm scope check
     ensures: if not NpmScope.prefix_is_project_local or not NpmScope.cache_is_project_local:
@@ -78,7 +102,38 @@ rule DoctorPerformsRequiredChecks {
     ensures: if SettingsShim.exists and not SettingsShim.points_to_configured_root:
         DoctorError(reason: "settings_shim_not_pointing_to_configured_root")
 
+    -- P1.5: Bootstrap status check
+    ensures: if BootstrapState.status != completed:
+        DoctorError(reason: "bootstrap_not_completed")
+
+    -- P0.5: Settings classification check
+    ensures: if SettingsShim.exists and SettingsShim.classification in {user_owned, invalid_json}:
+        DoctorError(reason: "settings_not_mypi_managed")
+
     ensures: DoctorRun.checks_completed = true
+}
+
+-- P1.5: Warning-level checks (non-fatal)
+
+rule DoctorPerformsWarningChecks {
+    when: DoctorRequested()
+
+    -- P0.4: Floating version warning
+    ensures: if PiPackage.install_strategy = floating_npm:
+        DoctorWarning(reason: "floating_pi_version")
+
+    -- P1.5: Version mismatch warning
+    ensures: if PiExecutable.installed and PiPackage.version != null
+            and PiExecutable.installed_version != PiPackage.version:
+        DoctorWarning(reason: "pi_version_mismatch")
+
+    -- P1.1: Missing npmCommand warning
+    ensures: if SettingsShim.exists and not SettingsShim.npm_command_configured:
+        DoctorWarning(reason: "missing_npm_command_in_settings")
+
+    -- P1.5: Resource directory check
+    ensures: if AgentRoot.exists and not AgentRoot.required_dirs_present:
+        DoctorWarning(reason: "missing_resource_directory")
 }
 
 rule DoctorCountsErrors {
@@ -86,9 +141,15 @@ rule DoctorCountsErrors {
     ensures: DoctorRun.computed_error_count = DoctorRun.computed_error_count + 1
 }
 
+rule DoctorCountsWarnings {
+    when: DoctorWarning(reason)
+    ensures: DoctorRun.computed_warning_count = DoctorRun.computed_warning_count + 1
+}
+
 rule DoctorFinalizeCounts {
     when: DoctorRun.checks_completed = true
     ensures: DoctorRun.error_count = DoctorRun.computed_error_count
+    ensures: DoctorRun.warning_count = DoctorRun.computed_warning_count
 }
 
 rule DoctorExitCodePolicy {
@@ -97,6 +158,10 @@ rule DoctorExitCodePolicy {
         DoctorRun.exit_code = 1
     ensures: if DoctorRun.computed_error_count = 0:
         DoctorRun.exit_code = 0
+    @guidance
+        -- Errors cause exit code 1. Warnings are reported but do not
+        -- cause non-zero exit. This allows floating versions to be
+        -- explicitly acknowledged without breaking doctor.
 }
 
 -- Doctor must not pass when Pi is missing (R-007 acceptance criteria)
@@ -110,4 +175,13 @@ invariant DoctorFailsWhenNodeMissing {
 
 invariant DoctorFailsWhenNpmMissing {
     DoctorRun.checks_completed and not NodeRuntime.npm_available implies DoctorRun.exit_code = 1
+}
+
+invariant DoctorFailsWhenBootstrapIncomplete {
+    DoctorRun.checks_completed and BootstrapState.status != completed implies DoctorRun.exit_code = 1
+}
+
+invariant DoctorWarningsAreNonFatal {
+    -- Warnings alone do not cause exit code 1
+    DoctorRun.checks_completed and DoctorRun.computed_error_count = 0 implies DoctorRun.exit_code = 0
 }

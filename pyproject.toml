@@ -56,12 +56,9 @@ testpaths = ["tests"]
 
 [tool.ty]
 
-#[tool.ty.environment]
-#root = ["."]
-
-[tool.ty.src]
-include = ["src", "tests"]
-exclude = [".devenv", ".git", ".scratch", ".vscode", ".agents", ".codex"]
+[tool.ty.environment]
+root = ["."]
+python = ".devenv/state/venv"
 
 [tool.ruff]
 line-length = 120

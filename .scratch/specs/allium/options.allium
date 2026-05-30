@@ -8,6 +8,9 @@
 -- R-018: Remove or implement sourceRoot.
 -- R-019: Robust shell quoting.
 -- R-020: Consistent Python version pinning.
+-- P0.1: Remove expose_pi_agent_shim, expose upstream pi directly.
+-- P0.4: Pin piPackageVersion by default for reproducibility.
+-- P1.4: Validate piAgent.root rejects absolute paths and traversal.
 
 use "./core.allium" as core
 
@@ -20,20 +23,21 @@ entity ModuleOptions {
     node_package: String
     pi_package_name: String
     pi_package_version: String?
-    npm_install_flags: List<String>
+    npm_install_flags: Set<String>
     bootstrap_mode: first_entry_only | manual_only | every_entry
-    expose_pi_agent_shim: Boolean
+    allow_floating_pi_version: Boolean
+    mypi_agent_version: String
 }
 
-Given ModuleOptions {
+default ModuleOptions module_options = {
     enable: true
     root: ".agents/pi"
     node_package: "pkgs.nodejs_22"
     pi_package_name: "@earendil-works/pi-coding-agent"
     pi_package_version: null
-    npm_install_flags: ["--ignore-scripts", "--no-audit", "--no-fund"]
+    npm_install_flags: {"--ignore-scripts", "--no-audit", "--no-fund"}
     bootstrap_mode: first_entry_only
-    expose_pi_agent_shim: false
+    allow_floating_pi_version: false
 }
 
 -- Environment variables set by the module in the devenv shell.
@@ -41,10 +45,21 @@ Given ModuleOptions {
 entity ShellEnvironment {
     mypi_agent_root: String
     mypi_project_root: String
+    mypi_agent_version: String
+    mypi_pi_package_name: String
+    mypi_pi_package_version: String?
     npm_config_prefix: String
     npm_config_cache: String
     npm_config_audit: String
     npm_config_fund: String
+    path_includes_node_modules_bin: Boolean
+}
+
+surface OptionsLocalTriggers {
+    facing _: ShellEnvironment
+
+    provides:
+        ShellEntered()
 }
 
 -- R-006: npm configuration must be repo-scoped
@@ -78,17 +93,40 @@ rule ModuleProvidesNodeRuntime {
         -- packages = [ mypiBin cfg.nodePackage ];
 }
 
--- R-008: Expose mypi on PATH, optionally expose pi-agent shim
+-- P0.1: Expose upstream pi directly via PATH, not through a wrapper.
 
-rule ModuleExposesCliTools {
+rule ModuleExposesUpstreamPi {
     when: ShellEntered()
     requires: ModuleOptions.enable
     ensures: ConsumerProject.has_mypi_on_path = true
-    ensures: if ModuleOptions.expose_pi_agent_shim:
-        PiAgentShimAvailable()
+    ensures: ShellEnvironment.path_includes_node_modules_bin = true
     @guidance
-        -- Default: only mypi is on PATH.
-        -- If exposePiAgentShim = true, also add the pi-agent compatibility wrapper.
+        -- Add the project-local npm bin directory to PATH during shell entry:
+        -- enterShell = lib.mkAfter ''
+        --   project_root="''${DEVENV_ROOT:-$PWD}"
+        --   export PATH="$project_root/$root_rel/node_modules/.bin:$PATH"
+        -- '';
+        -- This exposes the upstream pi binary directly. No pi-agent wrapper.
+        -- The pi command resolves to .agents/pi/node_modules/.bin/pi.
+}
+
+-- P0.1: Export MYPI_AGENT_VERSION for config hash computation.
+
+rule ModuleExportsVersion {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ShellEnvironment.mypi_agent_version = ModuleOptions.mypi_agent_version
+    @guidance
+        -- Export MYPI_AGENT_VERSION from the Nix package version.
+        -- The Python config hash includes this value.
+}
+
+-- P1.4: Validate piAgent.root rejects absolute paths and ".." traversal.
+
+invariant RootIsProjectRelative {
+    ModuleOptions.enable implies
+        not ModuleOptions.root.starts_with("/")
+        and not ModuleOptions.root.contains("..")
 }
 
 -- R-019: Shell quoting must be robust
@@ -98,6 +136,15 @@ invariant ShellQuotingIsRobust {
     -- The root must be validated as project-relative.
     ModuleOptions.enable implies
         ShellEnvironment.mypi_agent_root = ModuleOptions.root
+}
+
+-- P0.4: Reproducibility - pinned version by default.
+
+invariant PinnedVersionByDefault {
+    -- If piPackageVersion is null and allow_floating_pi_version is false,
+    -- sync must error or warn. Floating versions require explicit opt-in.
+    ModuleOptions.pi_package_version = null and not ModuleOptions.allow_floating_pi_version
+        implies PiPackage.install_strategy != floating_npm
 }
 
 -- R-018: sourceRoot must be removed

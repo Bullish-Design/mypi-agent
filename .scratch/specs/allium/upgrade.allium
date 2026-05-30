@@ -33,6 +33,7 @@ surface UpgradePlanningSurface {
     facing _: SyncPlan
 
     provides:
+        ShellEntered()
         DesiredStateChanged()
         SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
         SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)

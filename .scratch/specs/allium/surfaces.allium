@@ -5,6 +5,9 @@
 -- R-009: mypi run must either run something or be removed.
 -- R-013: Content-aware settings shim classification.
 -- R-022: mypi needs-sync lightweight check.
+-- P0.1: Upstream pi is exposed directly, not through a wrapper.
+-- P0.2: mypi pi must pass through all upstream flags.
+-- P0.6: needs-sync must verify actual runtime state.
 
 use "./core.allium" as core
 
@@ -15,6 +18,7 @@ entity SettingsShim {
     managed_keys: List<String>
     marker_present: Boolean
     marker_schema_version: Integer when marker_present
+    npm_command_configured: Boolean
 }
 
 -- Shell entry surface
@@ -30,6 +34,11 @@ surface ShellEntrySurface {
         -- R-021: Shell bootstrap must not silently swallow failures.
         -- Errors are visible. Normal no-op shell entry is quiet.
         -- Bootstrap does not repeatedly perform expensive network installs.
+
+    @guarantee DirectPiExposure
+        -- P0.1: The shell adds .agents/pi/node_modules/.bin to PATH,
+        -- exposing the upstream pi binary directly. No pi-agent wrapper
+        -- is generated or required for the default path.
 }
 
 -- Main mypi command surface
@@ -49,45 +58,52 @@ surface MypiCommand {
         SecretRuntimePolicy.secrets_written_to_generated_config
         SecretRuntimePolicy.missing_env_files_warning
         SecretRuntimePolicy.warning_reason_missing_env_files_only
-
-    @guarantee Passthrough
-        -- The wrapper delegates to Pi CLI and preserves arguments and exit behavior.
 }
 
--- R-008: mypi agent command - the real Pi launcher
+-- P0.1/P0.2: mypi pi command - passthrough to upstream Pi CLI.
+-- Replaces the old AgentCommandSurface. The upstream CLI is "pi",
+-- not "pi-agent". mypi pi is an optional passthrough alias.
 
-surface AgentCommandSurface {
-    facing _: PiExecutable
+surface PiCommandSurface {
+    facing _: core/PiExecutable
 
     provides:
-        AgentRequested(args: List<String>)
+        PiRequested(args: List<String>)
 
     exposes:
-        PiExecutable.installed
-        PiExecutable.path_exists
-        PiExecutable.is_executable
-        PiExecutable.version_check_passed
+        core/PiExecutable.installed
+        core/PiExecutable.path_exists
+        core/PiExecutable.is_executable
+        core/PiExecutable.version_check_passed
 
-    @guarantee PiDelegation
-        -- mypi agent forwards all arguments to the Pi executable.
-        -- Exit code is preserved from the Pi process.
+    @guarantee PiPassthrough
+        -- P0.2: mypi pi forwards ALL arguments to the upstream Pi executable,
+        -- including unknown flags like --version, --mode rpc, -p "prompt".
+        -- Uses Typer context_settings with allow_extra_args and
+        -- ignore_unknown_options. Exit code is preserved from the Pi process.
         -- If Pi is not installed, emits a clear error directing
         -- the user to run mypi sync.
 }
 
-rule AgentLaunchesPi {
-    when: AgentRequested(args)
-    requires: PiExecutable.path_exists and PiExecutable.is_executable
+rule PiLaunchesPi {
+    when: PiRequested(args)
+    requires: core/PiExecutable.path_exists and core/PiExecutable.is_executable
     ensures: PiLaunched(args)
     @guidance
-        -- Execute the Pi binary at the configured path, forwarding all args.
+        -- Execute the upstream Pi binary at node_modules/.bin/pi,
+        -- forwarding all args via ctx.args.
         -- Preserve stdin/stdout/stderr and exit code.
+        -- Implementation:
+        -- @app.command("pi", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+        -- def pi_command(ctx: typer.Context) -> None:
+        --     result = subprocess.run([str(pi_executable), *ctx.args], check=False)
+        --     raise typer.Exit(code=result.returncode)
 }
 
-rule AgentFailsWhenPiMissing {
-    when: AgentRequested(args)
-    requires: not PiExecutable.path_exists or not PiExecutable.is_executable
-    ensures: AgentError(reason: "pi_not_available")
+rule PiFailsWhenPiMissing {
+    when: PiRequested(args)
+    requires: not core/PiExecutable.path_exists or not core/PiExecutable.is_executable
+    ensures: PiError(reason: "pi_not_available")
     @guidance
         -- Print: "error: Pi is not installed. Run: mypi sync"
         -- Exit with code 1.
@@ -111,6 +127,7 @@ surface SyncCommandSurface {
         SyncRun.diff_requested
         SyncRun.trigger
         SyncRun.completed
+        SyncRun.pi_installed
         SyncRun.existing_files_overwritten
         SyncRun.bootstrap_performed
         SyncRun.manifest_healed
@@ -122,15 +139,22 @@ surface SyncCommandSurface {
         InstalledManifest.valid_json
         InstalledManifest.schema_valid
         SettingsShim.points_to_configured_root
+        BootstrapState.status
+        BootstrapState.pi_installed
 
     @guarantee NonDestructiveDefault
         -- Explicit sync creates missing files and does not overwrite existing files by default.
 
     @guarantee DiffIsReadOnly
         -- R-010: When --diff is set, the sync plan is printed and no filesystem writes occur.
+
+    @guarantee SettingsSafety
+        -- P0.5: Sync will not silently adopt user-owned or invalid .pi/settings.json.
+        -- Requires --repair-shim to adopt/repair non-MYPI-managed settings.
 }
 
 -- R-022: mypi needs-sync lightweight check
+-- P0.6: needs-sync must verify actual runtime state, not just config hash.
 
 surface NeedsSyncSurface {
     facing _: SettingsShim
@@ -145,6 +169,11 @@ surface NeedsSyncSurface {
     @guarantee Lightweight
         -- needs-sync compares a config hash/state file rather than
         -- performing full sync planning. It does not mutate the filesystem.
+
+    @guarantee RuntimeStateAware
+        -- P0.6: needs-sync checks actual runtime invariants, not just
+        -- config hash. A missing or non-executable pi binary, failed
+        -- bootstrap status, or missing resource dirs all trigger sync.
 }
 
 entity NeedsSyncResult {
@@ -152,16 +181,28 @@ entity NeedsSyncResult {
     reason: String when sync_needed
 }
 
-rule NeedsSyncChecksConfigHash {
+-- P0.6: Deepened needs-sync check that verifies actual runtime state.
+
+rule NeedsSyncChecksRuntimeState {
     when: NeedsSyncRequested(trigger)
     ensures: NeedsSyncResult.sync_needed =
         not AgentRoot.exists
         or not SettingsShim.exists
         or not InstalledManifest.exists
-        or DesiredState.hash_inputs_changed
+        or not PiExecutable.path_exists
+        or not PiExecutable.is_executable
+        or BootstrapState.status != completed
+        or core/DesiredState.hash_inputs_changed
     ensures: if NeedsSyncResult.sync_needed:
         NeedsSyncResult.reason = "state_drift_detected"
     @guidance
+        -- P0.6: Minimum checks beyond config hash:
+        -- 1. pi binary exists at node_modules/.bin/pi
+        -- 2. pi binary is executable
+        -- 3. bootstrap state status is "completed"
+        -- 4. resource directories exist
+        -- Better: also validate manifest schema, installed package
+        -- version against MYPI_PI_PACKAGE_VERSION, npm package metadata.
         -- Hash inputs include: piAgent.root, Pi package name/version,
         -- npm install flags, managed settings schema version,
         -- managed resources manifest schema version, mypi-agent version.
@@ -179,8 +220,13 @@ surface DoctorCommandSurface {
         DoctorRun.requested
         DoctorRun.checks_completed
         DoctorRun.error_count
-        DoctorRun.computed_error_count
+        DoctorRun.warning_count
         DoctorRun.exit_code
+
+    @guarantee RunsWhenBroken
+        -- P0.2 (cli review): Doctor should run even when the settings shim
+        -- is missing or invalid. Doctor diagnoses broken bootstrap states,
+        -- it should not be blocked by them.
 }
 
 -- Paths command surface

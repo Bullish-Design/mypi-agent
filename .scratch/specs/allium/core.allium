@@ -29,6 +29,9 @@ entity PiExecutable {
     is_executable: Boolean
     version_check_passed: Boolean
     installed_version: String when installed
+
+    -- P0.1: Pi executable path points to upstream node_modules/.bin/pi,
+    -- not a generated wrapper at .agents/pi/bin/pi-agent.
 }
 
 entity NpmScope {
@@ -45,12 +48,36 @@ entity WriteAction {
     managed: Boolean
 }
 
+-- P0.3: Bootstrap state tracks whether pi was actually installed.
+-- Failed or skipped installs must not be marked completed.
+
+entity BootstrapState {
+    status: completed | failed | partial
+    trigger: shell | manual | needs_sync_check
+    config_hash: String
+    pi_installed: Boolean
+    pi_executable: String when pi_installed
+    package_name: String
+    package_version: String when pi_installed
+    last_error: String?
+    schema_version: Integer
+}
+
+-- P1.2: Sync locking prevents concurrent sync races.
+
+entity SyncLock {
+    held: Boolean
+    holder_pid: Integer when held
+    lock_path: String
+}
+
 entity SyncRun {
     explicit: Boolean
     repair_shim: Boolean
     diff_requested: Boolean
     trigger: shell | manual | needs_sync_check
     completed: Boolean
+    pi_installed: Boolean
     existing_files_overwritten: Boolean
     upgrade_requires_explicit_sync: Boolean
     bootstrap_performed: Boolean
@@ -124,4 +151,23 @@ invariant NoSecretConfigWrites {
 
 invariant EnvWarningScope {
     SecretRuntimePolicy.missing_env_files_warning implies SecretRuntimePolicy.warning_reason_missing_env_files_only
+}
+
+-- P0.3: Bootstrap is only completed when pi is actually installed and executable.
+
+invariant BootstrapCompletedImpliesPiInstalled {
+    BootstrapState.status = completed implies
+        BootstrapState.pi_installed
+        and PiExecutable.path_exists
+        and PiExecutable.is_executable
+}
+
+invariant FailedBootstrapRetriggersSync {
+    BootstrapState.status = failed implies not BootstrapState.pi_installed
+}
+
+-- P1.2: Sync operations require the lock.
+
+invariant SyncRequiresLock {
+    SyncRun.completed implies SyncLock.held
 }

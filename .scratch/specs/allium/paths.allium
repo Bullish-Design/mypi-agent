@@ -3,6 +3,8 @@
 -- Path resolution and project root discovery.
 -- R-016: mypi must discover the repository/devenv root.
 -- R-017: mypi should only operate inside a devenv-managed project by default.
+-- P0.1: pi_executable_path points to node_modules/.bin/pi, not bin/pi-agent.
+-- P1.4: agent_root must validate containment inside project root.
 
 use "./core.allium" as core
 
@@ -74,6 +76,21 @@ rule RejectUnmanagedDirectory {
         -- Override with --allow-unmanaged flag or MYPI_ALLOW_UNMANAGED=1 env var.
 }
 
+-- P1.4: Validate agent root containment inside project root.
+
+rule ValidateAgentRootContainment {
+    when: MypiInvoked()
+    requires: ProjectRoot.discovered
+    ensures: if AgentRootEscapesProject():
+        ProjectRootError(reason: "agent_root_outside_project")
+    @guidance
+        -- Resolve the agent root path and verify it is inside the project root.
+        -- root = (self.project_root / override).resolve()
+        -- if self.project_root.resolve() not in root.parents
+        --     and root != self.project_root.resolve():
+        --     raise RuntimeError("error: MYPI_AGENT_ROOT must stay inside the project root")
+}
+
 -- Expose resolved paths
 
 rule ExposeResolvedPaths {
@@ -87,6 +104,11 @@ rule ExposeResolvedPaths {
     ensures: PathsSurface.pi_executable_path_exposed = true
     ensures: PathsSurface.node_path_exposed = true
     ensures: PathsSurface.npm_prefix_exposed = true
+    @guidance
+        -- P0.1: pi_executable_path must resolve to:
+        --   agent_root / "node_modules" / ".bin" / "pi"
+        -- not:
+        --   agent_root / "bin" / "pi-agent"
 }
 
 invariant PathsOutputIsCompleteWhenAvailable {
@@ -104,4 +126,10 @@ invariant SubdirectoryInvocationUsesProjectRoot {
     -- R-016/R-032: Running mypi from a subdirectory still targets the repo root
     ProjectRoot.discovered implies
         AgentRoot.path = ProjectRoot.path + "/" + ModuleOptions.root
+}
+
+-- P1.4: Agent root must stay inside the project root.
+
+invariant AgentRootContainedInProject {
+    ProjectRoot.discovered implies not AgentRootEscapesProject()
 }
