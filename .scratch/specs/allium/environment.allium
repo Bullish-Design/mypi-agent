@@ -5,8 +5,8 @@
 -- R-006: Repo-scoped npm configuration.
 -- R-016: Project root discovery.
 -- R-017: Operate inside devenv-managed projects only.
--- P0.1: Expose upstream pi on PATH via node_modules/.bin, not a wrapper.
 -- P1.4: Validate agent root stays inside project root.
+-- Pi is accessed via scripts.pi wrapper, not PATH.
 
 use "./core.allium" as core
 
@@ -45,6 +45,7 @@ entity ModuleOptions {
     npm_install_flags: Set<String>
     bootstrap_mode: first_entry_only | manual_only | every_entry
     allow_floating_pi_version: Boolean
+    secrets_enable: Boolean
     mypi_agent_version: String
 }
 
@@ -57,6 +58,7 @@ default ModuleOptions module_options = {
     npm_install_flags: {"--ignore-scripts", "--no-audit", "--no-fund"}
     bootstrap_mode: first_entry_only
     allow_floating_pi_version: false
+    secrets_enable: true
 }
 
 surface EnvironmentSurface {
@@ -134,12 +136,13 @@ rule ModuleConfiguresNpmScope {
     ensures: NpmScope.fund_disabled = true
 }
 
--- P0.1: Expose upstream pi via PATH
+-- node_modules/.bin is NOT on PATH. Pi is accessed via scripts.pi wrapper.
 
-rule ModuleExposesUpstreamPi {
-    when: ShellEntered()
-    requires: ModuleOptions.enable
-    ensures: ShellEnvironment.path_includes_node_modules_bin = true
+invariant NodeModulesBinNotOnPath {
+    -- The wrapper calls Pi by absolute path through SecretSpec.
+    -- Putting node_modules/.bin on PATH would let the raw binary
+    -- shadow the wrapper, bypassing secret injection.
+    ModuleOptions.enable implies not ShellEnvironment.path_includes_node_modules_bin
 }
 
 -- P1.4: Validate root is project-relative

@@ -87,11 +87,9 @@ entity SyncRun {
     filesystem_mutated: Boolean when diff_requested
 }
 
-entity SecretRuntimePolicy {
-    secrets_written_to_generated_config: Boolean
-    secrets_available_at_evaluation_time: Boolean
-    config_write_blocked: Boolean
-}
+-- SecretSpec is the sole API-key boundary. The scripts.pi wrapper
+-- uses `secretspec run` to inject keys into the Pi process only.
+-- No mypi command or generated config receives secret values.
 
 -- Safety invariants
 
@@ -133,16 +131,13 @@ invariant NpmScopeIsProjectLocal {
     NpmScope.prefix_is_project_local and NpmScope.cache_is_project_local
 }
 
-invariant NoSecretPersistence {
-    not SecretRuntimePolicy.secrets_written_to_generated_config
-}
-
-invariant NoEvalTimeSecrets {
-    not SecretRuntimePolicy.secrets_available_at_evaluation_time
-}
-
-invariant SecretConfigWritesBlocked {
-    SecretRuntimePolicy.config_write_blocked
+invariant SecretsOnlyViaSecretSpec {
+    -- Pi receives API keys only through the scripts.pi wrapper,
+    -- which uses `secretspec run`. No mypi command or generated
+    -- config file contains secret values. Enforced by architecture:
+    -- the wrapper calls Pi by absolute path through SecretSpec,
+    -- node_modules/.bin is not on PATH, and mypi pi/agent commands
+    -- are removed.
 }
 
 -- P0.3: Bootstrap is only completed when pi is actually installed and executable.

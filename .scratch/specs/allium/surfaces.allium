@@ -1,13 +1,11 @@
 -- allium: 3
 
--- All user-facing command surfaces for mypi CLI.
--- R-008: All user-facing operations go through mypi.
--- R-009: mypi run must either run something or be removed.
+-- User-facing command surfaces for mypi CLI and the pi wrapper.
+-- R-008: All setup/validation operations go through mypi.
 -- R-013: Content-aware settings shim classification.
 -- R-022: mypi needs-sync lightweight check.
--- P0.1: Upstream pi is exposed directly, not through a wrapper.
--- P0.2: mypi pi must pass through all upstream flags.
 -- P0.6: needs-sync must verify actual runtime state.
+-- Pi is accessed via scripts.pi wrapper with SecretSpec injection.
 
 use "./core.allium" as core
 
@@ -33,8 +31,9 @@ surface ShellEntrySurface {
     @guarantee ErrorVisibility
         -- R-021: Bootstrap errors are visible. No silent failures.
 
-    @guarantee DirectPiPath
-        -- P0.1: Upstream pi exposed on PATH via node_modules/.bin/pi
+    @guarantee PiViaWrapper
+        -- Pi is accessed via scripts.pi wrapper, not raw PATH.
+        -- node_modules/.bin is not on PATH.
 }
 
 -- Main mypi command surface
@@ -46,40 +45,45 @@ surface MypiCommand {
         MypiInvoked()
 }
 
--- P0.1/P0.2: mypi pi passthrough to upstream Pi CLI
+-- Pi wrapper surface (Nix scripts.pi, not a Python CLI command).
+-- The wrapper calls the real Pi binary by absolute path through
+-- `secretspec run`, injecting API keys into the Pi process only.
 
-surface PiCommandSurface {
+surface PiWrapperSurface {
     facing _: core/PiExecutable
 
     provides:
         PiRequested(args: List<String>)
 
-    @guarantee PiPassthrough
-        -- P0.2: All arguments forwarded to upstream Pi, preserving exit code
+    @guarantee SecretSpecInjection
+        -- Pi receives API keys via `secretspec run -- <real_pi>`.
+        -- Keys exist only in the Pi process environment, not the shell.
+
+    @guarantee AbsolutePathResolution
+        -- The wrapper calls Pi by absolute path at
+        -- $project_root/$agent_root/node_modules/.bin/pi.
+        -- node_modules/.bin is never on PATH.
+
+    @guarantee ArgsPassthrough
+        -- All arguments forwarded unchanged, preserving exit code.
 }
 
-rule PiLaunchesPi {
+rule PiWrapperLaunchesPi {
     when: PiRequested(args)
     requires: core/PiExecutable.path_exists and core/PiExecutable.is_executable
     ensures: PiLaunched(args)
     @guidance
-        -- Execute the upstream Pi binary at node_modules/.bin/pi,
-        -- forwarding all args via ctx.args.
-        -- Preserve stdin/stdout/stderr and exit code.
-        -- Implementation:
-        -- @app.command("pi", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-        -- def pi_command(ctx: typer.Context) -> None:
-        --     result = subprocess.run([str(pi_executable), *ctx.args], check=False)
-        --     raise typer.Exit(code=result.returncode)
+        -- Implemented as a Nix scripts.pi wrapper (not Python CLI).
+        -- exec secretspec run [--provider P] [--profile P] -- "$real_pi" "$@"
 }
 
-rule PiFailsWhenPiMissing {
+rule PiWrapperFailsWhenPiMissing {
     when: PiRequested(args)
     requires: not core/PiExecutable.path_exists or not core/PiExecutable.is_executable
     ensures: PiError(reason: "pi_not_available")
     @guidance
         -- Print: "error: Pi is not installed. Run: mypi sync"
-        -- Exit with code 1.
+        -- Exit with code 127.
 }
 
 -- Sync command surface
