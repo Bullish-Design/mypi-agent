@@ -29,6 +29,7 @@ devenv.local.nix
 .agents/pi/.state/
 .pi/**
 .agents/pi/**
+.agents/**
 
 # C extensions
 *.so
