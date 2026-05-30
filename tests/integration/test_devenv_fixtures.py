@@ -134,3 +134,31 @@ def test_tmp_repo_fixture_sync_and_doctor(tmp_path: Path) -> None:
         check=False,
     )
     assert doctor_result.returncode == 0, doctor_result.stdout + "\n" + doctor_result.stderr
+
+    pi_which_result = subprocess.run(
+        ["devenv", "shell", "--", "sh", "-lc", "command -v pi"],
+        cwd=project_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert pi_which_result.returncode == 0, pi_which_result.stdout + "\n" + pi_which_result.stderr
+    assert "node_modules/.bin/pi" not in pi_which_result.stdout
+
+    node_bin_on_path_result = subprocess.run(
+        [
+            "devenv",
+            "shell",
+            "--",
+            "sh",
+            "-lc",
+            "echo \"$PATH\" | tr ':' '\\n' | grep -F \"$PWD/.agents/pi/node_modules/.bin\" >/dev/null; test $? -ne 0",
+        ],
+        cwd=project_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert (
+        node_bin_on_path_result.returncode == 0
+    ), node_bin_on_path_result.stdout + "\n" + node_bin_on_path_result.stderr

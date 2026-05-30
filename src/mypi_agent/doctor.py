@@ -111,6 +111,9 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if shutil.which("npm") is None:
         errors.append("missing_npm")
         diagnostics.append({"code": "missing_npm", "severity": "error"})
+    if shutil.which("secretspec") is None:
+        warnings.append("secretspec_not_available")
+        diagnostics.append({"code": "secretspec_not_available", "severity": "warning"})
     if not paths.pi_executable_path.exists():
         errors.append("missing_pi_executable")
         diagnostics.append({"code": "missing_pi_executable", "severity": "error"})

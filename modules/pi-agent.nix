@@ -74,6 +74,12 @@ in
       default = "first_entry_only";
       description = "Bootstrap sync policy on shell entry.";
     };
+
+    secrets.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Run the pi command through SecretSpec for runtime secret injection.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -114,9 +120,47 @@ in
       '';
     };
 
+    scripts.pi = {
+      description = "Run Pi with SecretSpec runtime secrets";
+      exec =
+        let
+          providerArg = lib.optionalString ((config.secretspec.provider or null) != null)
+            "--provider ${lib.escapeShellArg config.secretspec.provider} ";
+          profileArg = lib.optionalString ((config.secretspec.profile or null) != null)
+            "--profile ${lib.escapeShellArg config.secretspec.profile} ";
+        in
+        ''
+          set -euo pipefail
+
+          if [ -n "''${DEVENV_ROOT:-}" ]; then
+            cd "$DEVENV_ROOT"
+          fi
+
+          project_root="''${DEVENV_ROOT:-$PWD}"
+          agent_root="''${MYPI_AGENT_ROOT:-.agents/pi}"
+          real_pi="$project_root/$agent_root/node_modules/.bin/pi"
+
+          if [ ! -x "$real_pi" ]; then
+            echo "error: Pi is not installed. Run: mypi sync" >&2
+            exit 127
+          fi
+
+          ${if cfg.secrets.enable then ''
+            exec secretspec run ${providerArg}${profileArg}-- "$real_pi" "$@"
+          '' else ''
+            exec "$real_pi" "$@"
+          ''}
+        '';
+    };
+
     enterShell = lib.mkAfter ''
-      export PATH="''${DEVENV_ROOT:-$PWD}/$MYPI_AGENT_ROOT/node_modules/.bin:$PATH"
       ${bootstrapCmd}
     '';
+
+    profiles.pi.module = {
+      enterShell = lib.mkAfter ''
+        pi
+      '';
+    };
   };
 }

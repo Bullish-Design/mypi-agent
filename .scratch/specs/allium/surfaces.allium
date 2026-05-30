@@ -155,6 +155,23 @@ rule NeedsSyncChecksRuntimeState {
         -- managed resources manifest schema version, mypi-agent version.
 }
 
+-- Pi profile surface
+-- `devenv -P pi shell` launches pi on entry, then drops to interactive shell.
+
+surface PiProfileSurface {
+    facing _: core/PiExecutable
+
+    provides:
+        PiProfileEntered()
+
+    @guarantee InteractiveAfterExit
+        -- Pi is launched without exec, so the shell remains interactive
+        -- after pi exits (Ctrl+C or /exit).
+
+    @guarantee NoEffectOnDefaultShell
+        -- The default `devenv shell` (no -P flag) is unaffected.
+}
+
 -- Doctor command surface
 
 surface DoctorCommandSurface {

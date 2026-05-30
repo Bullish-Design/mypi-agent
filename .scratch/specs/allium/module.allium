@@ -62,6 +62,11 @@ surface DevenvImportSurface {
         consumer.has_pi_agent_root
         consumer.has_settings_shim
 
+    @guarantee PiProfileAvailable
+        -- The module defines a `pi` devenv profile so that
+        -- `devenv -P pi shell` launches pi on entry, then drops
+        -- to an interactive shell. The default shell is unaffected.
+
     @guarantee MinimalPublicSurface
         -- The root devenv.nix imports only ./modules/pi-agent.nix
         -- and sets piAgent.enable = lib.mkDefault true.
