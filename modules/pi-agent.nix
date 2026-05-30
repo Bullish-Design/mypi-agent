@@ -1,41 +1,8 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.piAgent;
-  cfgRootEscaped = lib.escapeShellArg cfg.root;
   cfgBootstrapModeEscaped = lib.escapeShellArg cfg.bootstrap.mode;
   mypiPkg = pkgs.callPackage ../packages/mypi-agent-cli.nix { };
-  mypiBin = pkgs.writeShellScriptBin "mypi" ''
-    set -euo pipefail
-    root_rel=${cfgRootEscaped}
-    project_root="''${DEVENV_ROOT:-$PWD}"
-    export MYPI_PROJECT_ROOT="$project_root"
-    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/$root_rel/npm-global"
-    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/$root_rel/.npm-cache"
-    export NPM_CONFIG_AUDIT="false"
-    export NPM_CONFIG_FUND="false"
-    export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
-    export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
-    export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
-    export MYPI_ALLOW_FLOATING_PI_VERSION=${lib.boolToString cfg.allowFloatingPiVersion}
-    if [ -n "''${DEVENV_ROOT:-}" ]; then
-      cd "$DEVENV_ROOT"
-    fi
-    export MYPI_AGENT_ROOT="$root_rel"
-    exec ${mypiPkg}/bin/mypi "$@"
-  '';
-  npmEnvCmd = ''
-    root_rel=${cfgRootEscaped}
-    project_root="''${DEVENV_ROOT:-$PWD}"
-    export MYPI_PROJECT_ROOT="$project_root"
-    export NPM_CONFIG_PREFIX="$MYPI_PROJECT_ROOT/$root_rel/npm-global"
-    export NPM_CONFIG_CACHE="$MYPI_PROJECT_ROOT/$root_rel/.npm-cache"
-    export NPM_CONFIG_AUDIT="false"
-    export NPM_CONFIG_FUND="false"
-    export MYPI_PI_PACKAGE_NAME=${lib.escapeShellArg cfg.piPackageName}
-    export MYPI_PI_PACKAGE_VERSION=${lib.escapeShellArg (if cfg.piPackageVersion == null then "" else cfg.piPackageVersion)}
-    export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
-    export MYPI_ALLOW_FLOATING_PI_VERSION=${lib.boolToString cfg.allowFloatingPiVersion}
-  '';
 
   bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
     if [ ${cfgBootstrapModeEscaped} = "every_entry" ] || mypi needs-sync --trigger shell; then
@@ -104,11 +71,33 @@ in
       }
     ];
 
-    packages = [ mypiBin cfg.nodePackage ];
+    env = {
+      MYPI_PROJECT_ROOT = config.devenv.root;
+      NPM_CONFIG_PREFIX = "${config.devenv.root}/${cfg.root}/npm-global";
+      NPM_CONFIG_CACHE = "${config.devenv.root}/${cfg.root}/.npm-cache";
+      NPM_CONFIG_AUDIT = "false";
+      NPM_CONFIG_FUND = "false";
+      MYPI_PI_PACKAGE_NAME = cfg.piPackageName;
+      MYPI_PI_PACKAGE_VERSION = if cfg.piPackageVersion == null then "" else cfg.piPackageVersion;
+      MYPI_ALLOW_FLOATING_PI_VERSION = lib.boolToString cfg.allowFloatingPiVersion;
+      MYPI_AGENT_ROOT = cfg.root;
+    };
+
+    packages = [ cfg.nodePackage ];
+
+    scripts.mypi = {
+      description = "MYPI agent CLI wrapper";
+      exec = ''
+        set -euo pipefail
+        export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
+        if [ -n "''${DEVENV_ROOT:-}" ]; then
+          cd "$DEVENV_ROOT"
+        fi
+        exec ${mypiPkg}/bin/mypi "$@"
+      '';
+    };
 
     enterShell = lib.mkAfter ''
-      ${npmEnvCmd}
-      export MYPI_AGENT_ROOT=${cfgRootEscaped}
       export PATH="''${DEVENV_ROOT:-$PWD}/$MYPI_AGENT_ROOT/node_modules/.bin:$PATH"
       ${bootstrapCmd}
     '';
