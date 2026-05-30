@@ -1,16 +1,25 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.piAgent;
   cfgBootstrapModeEscaped = lib.escapeShellArg cfg.bootstrap.mode;
   mypiPkg = pkgs.callPackage ../packages/mypi-agent-cli.nix { };
 
-  bootstrapCmd = if cfg.bootstrap.mode == "manual_only" then "" else ''
-    if [ ${cfgBootstrapModeEscaped} = "every_entry" ] || mypi needs-sync --trigger shell; then
-      if ! mypi sync --trigger shell; then
-        echo "warning: mypi bootstrap failed; run: mypi doctor" >&2
-      fi
-    fi
-  '';
+  bootstrapCmd =
+    if cfg.bootstrap.mode == "manual_only" then
+      ""
+    else
+      ''
+        if [ ${cfgBootstrapModeEscaped} = "every_entry" ] || mypi needs-sync --trigger shell; then
+          if ! mypi sync --trigger shell; then
+            echo "warning: mypi bootstrap failed; run: mypi doctor" >&2
+          fi
+        fi
+      '';
 in
 {
   options.piAgent = {
@@ -36,13 +45,17 @@ in
 
     piPackageVersion = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      default = "1.2.3";
+      default = "0.78.0";
       description = "Pinned Pi package version for reproducible installs.";
     };
 
     npmInstallFlags = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ "--ignore-scripts" "--no-audit" "--no-fund" ];
+      default = [
+        "--ignore-scripts"
+        "--no-audit"
+        "--no-fund"
+      ];
       description = "Additional flags passed to npm install for Pi package installation.";
     };
 
@@ -53,7 +66,11 @@ in
     };
 
     bootstrap.mode = lib.mkOption {
-      type = lib.types.enum [ "first_entry_only" "manual_only" "every_entry" ];
+      type = lib.types.enum [
+        "first_entry_only"
+        "manual_only"
+        "every_entry"
+      ];
       default = "first_entry_only";
       description = "Bootstrap sync policy on shell entry.";
     };
