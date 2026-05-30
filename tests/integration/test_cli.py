@@ -43,6 +43,16 @@ def test_cli_sync_repair_shim_rewrites_existing(tmp_path, monkeypatch):
     assert '"x-mypi-agent"' in settings.read_text(encoding="utf-8")
 
 
+def test_cli_sync_rejects_user_owned_settings_without_repair(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    settings = tmp_path / ".pi" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text('{"customKey":"value"}\n', encoding="utf-8")
+    result = runner.invoke(app, ["sync"], catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "not MYPI-managed" in result.stderr
+
+
 def test_cli_doctor_reports_errors_and_exit_code(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["doctor"], catch_exceptions=False)
