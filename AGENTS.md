@@ -52,5 +52,5 @@ Ignore runtime/install artifacts:
 Run project commands inside devenv via:
 
 ```bash
-./agent-devboot.sh <command>
+devenv shell -- <command>
 ```

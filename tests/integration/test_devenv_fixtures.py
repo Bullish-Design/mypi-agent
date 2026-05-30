@@ -68,8 +68,47 @@ def test_tmp_repo_fixture_sync_and_doctor(tmp_path: Path) -> None:
     )
     (project_dir / "devenv.nix").write_text("{ ... }: { }\n", encoding="utf-8")
 
+    fake_npm_setup = (
+        "mkdir -p .fake-bin && "
+        "cat > .fake-bin/npm <<'SH'\n"
+        "#!/usr/bin/env sh\n"
+        "set -eu\n"
+        "prefix=\n"
+        "pkg_name=\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in\n"
+        "    --prefix) shift; prefix=\"$1\" ;;\n"
+        "    @*) pkg_name=\"$1\" ;;\n"
+        "  esac\n"
+        "  shift\n"
+        "done\n"
+        "[ -n \"$prefix\" ] || exit 1\n"
+        "base_name=$(echo \"$pkg_name\" | sed 's/@[^@/]*$//')\n"
+        "[ -n \"$base_name\" ] || base_name='@earendil-works/pi-coding-agent'\n"
+        "mkdir -p \"$prefix/node_modules/.bin\" \"$prefix/node_modules/$base_name\"\n"
+        "cat > \"$prefix/node_modules/.bin/pi\" <<'PI'\n"
+        "#!/usr/bin/env sh\n"
+        "echo pi 0.0.1-fixture\n"
+        "PI\n"
+        "chmod +x \"$prefix/node_modules/.bin/pi\"\n"
+        "cat > \"$prefix/node_modules/$base_name/package.json\" <<'PKG'\n"
+        "{\"name\":\"@earendil-works/pi-coding-agent\",\"version\":\"0.0.1-fixture\"}\n"
+        "PKG\n"
+        "SH\n"
+        "chmod +x .fake-bin/npm"
+    )
+
+    setup_result = subprocess.run(
+        ["devenv", "shell", "--", "sh", "-lc", fake_npm_setup],
+        cwd=project_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert setup_result.returncode == 0, setup_result.stdout + "\n" + setup_result.stderr
+
     sync_result = subprocess.run(
-        ["devenv", "shell", "--", "mypi", "sync", "--trigger", "shell"],
+        ["devenv", "shell", "--", "sh", "-lc", "export PATH=\"$PWD/.fake-bin:$PATH\" && mypi sync --trigger shell"],
         cwd=project_dir,
         text=True,
         capture_output=True,
@@ -88,7 +127,7 @@ def test_tmp_repo_fixture_sync_and_doctor(tmp_path: Path) -> None:
         assert check_result.returncode == 0, check_result.stdout + "\n" + check_result.stderr
 
     doctor_result = subprocess.run(
-        ["devenv", "shell", "--", "mypi", "doctor"],
+        ["devenv", "shell", "--", "sh", "-lc", "export PATH=\"$PWD/.fake-bin:$PATH\" && mypi doctor"],
         cwd=project_dir,
         text=True,
         capture_output=True,

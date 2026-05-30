@@ -4,12 +4,12 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from .base_model import AlliumBase
+from .base_model import MypiBaseModel
 
 RESOURCE_LITERALS = Literal["extensions", "skills", "prompts", "themes"]
 
 
-class Manifest(AlliumBase):
+class Manifest(MypiBaseModel):
     schema_version: Literal[1]
     resources: list[RESOURCE_LITERALS]
     pi_package: str
@@ -18,7 +18,7 @@ class Manifest(AlliumBase):
     generated_by: str = "mypi-agent"
 
 
-class Paths(AlliumBase):
+class Paths(MypiBaseModel):
     project_root: Path
 
     @classmethod
@@ -49,7 +49,10 @@ class Paths(AlliumBase):
     def agent_root(self) -> Path:
         override = os.environ.get("MYPI_AGENT_ROOT")
         if override:
-            return self.project_root / override
+            root = (self.project_root / override).resolve()
+            if root != self.project_root and self.project_root not in root.parents:
+                raise RuntimeError("error: MYPI_AGENT_ROOT must stay within project root")
+            return root
         return self.project_root / ".agents" / "pi"
 
     @property

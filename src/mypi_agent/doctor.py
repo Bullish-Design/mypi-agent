@@ -7,16 +7,18 @@ import subprocess
 from pathlib import Path
 from pydantic import ValidationError
 
-from .base_model import AlliumBase
+from .base_model import MypiBaseModel
 from .models import Manifest, Paths
 
 
-class DoctorResult(AlliumBase):
+class DoctorResult(MypiBaseModel):
     errors: list[str]
+    warnings: list[str]
     requested: bool
     checks_completed: bool
     exit_code: int
     error_count: int
+    warning_count: int
     computed_error_count: int
     diagnostics: list[dict[str, str]]
 
@@ -58,6 +60,7 @@ def _settings_payload(paths: Paths) -> dict[str, object] | None:
 
 def run_doctor(paths: Paths) -> DoctorResult:
     errors: list[str] = []
+    warnings: list[str] = []
     diagnostics: list[dict[str, str]] = []
 
     if not paths.settings_path.exists():
@@ -99,6 +102,9 @@ def run_doctor(paths: Paths) -> DoctorResult:
         if not isinstance(marker, dict) or marker.get("agentRoot") != expected_root:
             errors.append("settings_shim_not_pointing_to_configured_root")
             diagnostics.append({"code": "settings_shim_not_pointing_to_configured_root", "severity": "error"})
+        if "npmCommand" not in settings_payload:
+            warnings.append("missing_npm_command")
+            diagnostics.append({"code": "missing_npm_command", "severity": "warning"})
     if shutil.which("node") is None:
         errors.append("missing_node")
         diagnostics.append({"code": "missing_node", "severity": "error"})
@@ -122,14 +128,32 @@ def run_doctor(paths: Paths) -> DoctorResult:
             errors.append("pi_version_check_failed")
             diagnostics.append({"code": "pi_version_check_failed", "severity": "error"})
 
+    for resource_dir in ("extensions", "skills", "prompts", "themes"):
+        if not (paths.agent_root / resource_dir).exists():
+            warnings.append(f"missing_resource_dir_{resource_dir}")
+            diagnostics.append({"code": f"missing_resource_dir_{resource_dir}", "severity": "warning"})
+
+    if paths.bootstrap_state_path.exists():
+        try:
+            bootstrap = json.loads(paths.bootstrap_state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            warnings.append("invalid_bootstrap_state")
+            diagnostics.append({"code": "invalid_bootstrap_state", "severity": "warning"})
+        else:
+            if not isinstance(bootstrap, dict) or bootstrap.get("status") != "completed":
+                warnings.append("bootstrap_not_completed")
+                diagnostics.append({"code": "bootstrap_not_completed", "severity": "warning"})
+
     computed_error_count = len(errors)
     exit_code = 1 if computed_error_count > 0 else 0
     return DoctorResult(
         errors=errors,
+        warnings=warnings,
         requested=True,
         checks_completed=True,
         exit_code=exit_code,
         error_count=computed_error_count,
+        warning_count=len(warnings),
         computed_error_count=computed_error_count,
         diagnostics=diagnostics,
     )

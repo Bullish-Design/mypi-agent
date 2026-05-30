@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import os
 
-from .base_model import AlliumBase
+from .base_model import MypiBaseModel
 from .models import Paths
 
-MANAGED_SETTINGS_KEYS = ["extensions", "skills", "prompts", "themes", "enableSkillCommands"]
+MANAGED_SETTINGS_KEYS = ["extensions", "skills", "prompts", "themes", "enableSkillCommands", "npmCommand"]
 
 
-class SettingsShimActor(AlliumBase):
+class SettingsShimActor(MypiBaseModel):
     exists: bool
     classification: str
     marker_present: bool
@@ -18,7 +18,7 @@ class SettingsShimActor(AlliumBase):
     points_to_configured_root: bool
 
 
-class SurfaceContext(AlliumBase):
+class SurfaceContext(MypiBaseModel):
     surface_name: str
     actor: object
 

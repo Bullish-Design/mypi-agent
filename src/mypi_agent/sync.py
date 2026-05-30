@@ -5,27 +5,29 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 
-from .base_model import AlliumBase
+from .base_model import MypiBaseModel
 from .models import Manifest, Paths
 
 RESOURCE_DIRS = ("extensions", "skills", "prompts", "themes")
-MANAGED_SETTINGS_KEYS = ["extensions", "skills", "prompts", "themes", "enableSkillCommands"]
+MANAGED_SETTINGS_KEYS = ["extensions", "skills", "prompts", "themes", "enableSkillCommands", "npmCommand"]
 SETTINGS_SCHEMA_VERSION = 1
 MANIFEST_SCHEMA_VERSION = 1
 
 
-class WriteAction(AlliumBase):
+class WriteAction(MypiBaseModel):
     path: str
     existed_before: bool
     content_changed: bool
     managed: bool
 
 
-class SyncResult(AlliumBase):
+class SyncResult(MypiBaseModel):
     created: list[Path]
     warnings: list[str]
     explicit: bool
@@ -74,8 +76,8 @@ def _read_json(path: Path) -> object:
 
 def atomic_write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    with tmp_path.open("w", encoding="utf-8") as handle:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        tmp_path = Path(handle.name)
         handle.write(json.dumps(payload, indent=2) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
@@ -92,6 +94,7 @@ def _read_json_or_none(path: Path) -> object | None:
 
 
 def _settings_payload(agent_root_relative: str) -> dict[str, object]:
+    npm = shutil.which("npm")
     return {
         "packages": [],
         "extensions": [f"../{agent_root_relative}/extensions"],
@@ -99,6 +102,7 @@ def _settings_payload(agent_root_relative: str) -> dict[str, object]:
         "prompts": [f"../{agent_root_relative}/prompts"],
         "themes": [f"../{agent_root_relative}/themes"],
         "enableSkillCommands": True,
+        "npmCommand": npm if npm is not None else "npm",
         "x-mypi-agent": {
             "managed": True,
             "schemaVersion": SETTINGS_SCHEMA_VERSION,
@@ -320,6 +324,21 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
             }
         ],
     }
+    existing_registry = _read_json_or_none(paths.primitive_registry_state_path)
+    if isinstance(existing_registry, dict):
+        installs = existing_registry.get("installs")
+        if isinstance(installs, list) and installs and isinstance(installs[0], dict):
+            prev = installs[0]
+            prev_identity = {
+                "package_name": prev.get("package_name"),
+                "package_version": prev.get("package_version"),
+                "npm_integrity_hash": prev.get("npm_integrity_hash"),
+                "npm_resolved_url": prev.get("npm_resolved_url"),
+            }
+            if _sha256_json(prev_identity)[:16] == registry_payload["installs"][0]["source_hash"]:
+                prev_installed_at = prev.get("installed_at_rfc3339_utc")
+                if isinstance(prev_installed_at, str) and prev_installed_at:
+                    registry_payload["installs"][0]["installed_at_rfc3339_utc"] = prev_installed_at
 
     file_payloads: dict[Path, object] = {
         paths.settings_path: merged_settings_payload,
@@ -408,28 +427,37 @@ def run_sync(
                 "Run `mypi sync --repair-shim` to adopt/repair the settings shim."
             )
 
-    plan = _build_sync_plan(paths, repair_shim=repair_shim, trigger=trigger, diff_requested=diff_requested)
     created: list[Path] = []
     write_actions: list[WriteAction] = []
-    if not diff_requested:
-        created, write_actions = _apply_sync_plan(paths, plan)
-        pi_verified = _pi_installed(paths)
-        bootstrap_state: dict[str, object] = {
-            "schema_version": 1,
-            "trigger": trigger,
-            "config_hash": _config_hash(paths),
-            "package_name": os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent"),
-        }
-        if pi_verified:
-            bootstrap_state["status"] = "completed"
-            bootstrap_state["pi_installed"] = True
-            bootstrap_state["pi_executable"] = str(paths.pi_executable_path.relative_to(paths.project_root))
-            bootstrap_state["last_error"] = None
-        else:
-            bootstrap_state["status"] = "failed"
-            bootstrap_state["pi_installed"] = False
-            bootstrap_state["last_error"] = "pi_install_failed"
-        atomic_write_json(paths.bootstrap_state_path, bootstrap_state)
+    if diff_requested:
+        plan = _build_sync_plan(paths, repair_shim=repair_shim, trigger=trigger, diff_requested=diff_requested)
+    else:
+        paths.state_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = paths.state_dir / "sync.lock"
+        with lock_path.open("a+", encoding="utf-8") as lock_handle:
+            flock(lock_handle.fileno(), LOCK_EX)
+            try:
+                plan = _build_sync_plan(paths, repair_shim=repair_shim, trigger=trigger, diff_requested=diff_requested)
+                created, write_actions = _apply_sync_plan(paths, plan)
+                pi_verified = _pi_installed(paths)
+                bootstrap_state: dict[str, object] = {
+                    "schema_version": 1,
+                    "trigger": trigger,
+                    "config_hash": _config_hash(paths),
+                    "package_name": os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent"),
+                }
+                if pi_verified:
+                    bootstrap_state["status"] = "completed"
+                    bootstrap_state["pi_installed"] = True
+                    bootstrap_state["pi_executable"] = str(paths.pi_executable_path.relative_to(paths.project_root))
+                    bootstrap_state["last_error"] = None
+                else:
+                    bootstrap_state["status"] = "failed"
+                    bootstrap_state["pi_installed"] = False
+                    bootstrap_state["last_error"] = "pi_install_failed"
+                atomic_write_json(paths.bootstrap_state_path, bootstrap_state)
+            finally:
+                flock(lock_handle.fileno(), LOCK_UN)
 
     hash_inputs_changed = plan.bootstrap_performed or plan.shim_updated or plan.manifest_healed
     existing_files_overwritten = any(a.existed_before and a.content_changed for a in write_actions)

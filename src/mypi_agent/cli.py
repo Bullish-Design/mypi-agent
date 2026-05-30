@@ -72,6 +72,8 @@ def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
     if json_output:
         typer.echo(json.dumps(result.model_dump(), indent=2))
         raise typer.Exit(code=result.exit_code)
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}")
     for error in result.errors:
         typer.echo(f"error: {error}")
     raise typer.Exit(code=result.exit_code)

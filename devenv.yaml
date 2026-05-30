@@ -1,18 +1,19 @@
+# devenv.yaml
 # yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+
+require_version: ">=2.1"
+
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   nixpkgs-python:
     url: github:cachix/nixpkgs-python
-  # nix2container:
-  #   url: github:nlewo/nix2container
-  # mk-shell-bin:
-  #   url: github:rrbutani/nix-mk-shell-bin
+    follows: nixpkgs
+  allium-env:
+    url: github:Bullish-Design/allium-env?ref=v0.1.0
+    flake: false
 
-
-# If you're using non-OSS software, you can set allowUnfree to true.
-# allowUnfree: true
-
-# If you're willing to use a package that's vulnerable
-# permittedInsecurePackages:
-#  - "openssl-1.1.1w"
+imports:
+  - allium-env
+  - ./dev/allium
+  - ./dev
