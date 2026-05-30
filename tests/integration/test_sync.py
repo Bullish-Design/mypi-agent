@@ -65,7 +65,8 @@ def test_sync_sets_trigger_and_bootstrap_state(tmp_path):
     result = run_sync(paths, explicit=True, repair_shim=False, trigger="shell")
     assert result.trigger == "shell"
     bootstrap = json.loads(paths.bootstrap_state_path.read_text(encoding="utf-8"))
-    assert bootstrap["status"] == "completed"
+    expected_status = "completed" if result.pi_installed else "failed"
+    assert bootstrap["status"] == expected_status
     assert bootstrap["trigger"] == "shell"
 
 
@@ -184,6 +185,9 @@ def test_sync_installs_pi_agent_with_fake_npm(tmp_path, monkeypatch):
     pi_executable = paths.agent_root / "node_modules" / ".bin" / "pi"
     assert result.pi_installed is True
     assert pi_executable.exists()
+    bootstrap = json.loads(paths.bootstrap_state_path.read_text(encoding="utf-8"))
+    assert bootstrap["status"] == "completed"
+    assert bootstrap["pi_installed"] is True
     registry = json.loads(paths.primitive_registry_state_path.read_text(encoding="utf-8"))
     assert registry["schema_version"] == 1
     assert "core" in registry["groups"]
@@ -210,3 +214,21 @@ def test_sync_pinned_package_uses_name_at_version(tmp_path, monkeypatch):
     npm_installs = [cmd for cmd in captured if len(cmd) > 1 and cmd[0] == "/usr/bin/npm" and cmd[1] == "install"]
     assert npm_installs
     assert npm_installs[0][-1] == "@earendil-works/pi-coding-agent@1.2.3"
+
+
+def test_failed_install_writes_failed_bootstrap_state(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+
+    def _fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if len(args) > 1 and args[0] == "/usr/bin/npm" and args[1] == "install":
+            return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="install failed")
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+    result = run_sync(paths, explicit=True, repair_shim=False)
+    bootstrap = json.loads(paths.bootstrap_state_path.read_text(encoding="utf-8"))
+    assert result.pi_installed is False
+    assert bootstrap["status"] == "failed"
+    assert bootstrap["pi_installed"] is False
+    assert bootstrap["last_error"] == "pi_install_failed"

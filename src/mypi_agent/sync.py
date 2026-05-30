@@ -117,6 +117,11 @@ def _sha256_json(payload: object) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _pi_installed(paths: Paths) -> bool:
+    pi_path = paths.pi_executable_path
+    return pi_path.exists() and os.access(pi_path, os.X_OK)
+
+
 def _manifest_payload(pi_package_name: str, pi_version: str | None, node_version: str | None) -> dict[str, object]:
     return Manifest(
         schema_version=MANIFEST_SCHEMA_VERSION,
@@ -304,7 +309,6 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
     file_payloads: dict[Path, object] = {
         paths.settings_path: merged_settings_payload,
         paths.manifest_path: manifest_payload,
-        paths.bootstrap_state_path: {"status": "completed", "trigger": trigger, "config_hash": _config_hash(paths)},
         paths.drift_report_path: {"has_drift": False, "reason": "none"},
         paths.installed_packages_state_path: {"packages": [{"name": pi_package_name, "version": installed_version}]},
         paths.primitive_registry_state_path: registry_payload,
@@ -382,9 +386,27 @@ def run_sync(
     write_actions: list[WriteAction] = []
     if not diff_requested:
         created, write_actions = _apply_sync_plan(paths, plan)
+        pi_verified = _pi_installed(paths)
+        bootstrap_state: dict[str, object] = {
+            "schema_version": 1,
+            "trigger": trigger,
+            "config_hash": _config_hash(paths),
+            "package_name": os.environ.get("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent"),
+        }
+        if pi_verified:
+            bootstrap_state["status"] = "completed"
+            bootstrap_state["pi_installed"] = True
+            bootstrap_state["pi_executable"] = str(paths.pi_executable_path.relative_to(paths.project_root))
+            bootstrap_state["last_error"] = None
+        else:
+            bootstrap_state["status"] = "failed"
+            bootstrap_state["pi_installed"] = False
+            bootstrap_state["last_error"] = "pi_install_failed"
+        atomic_write_json(paths.bootstrap_state_path, bootstrap_state)
 
     hash_inputs_changed = plan.bootstrap_performed or plan.shim_updated or plan.manifest_healed
     existing_files_overwritten = any(a.existed_before and a.content_changed for a in write_actions)
+    pi_verified_final = _pi_installed(paths) if not diff_requested else False
     return SyncResult(
         created=created,
         warnings=plan.warnings,
@@ -398,7 +420,7 @@ def run_sync(
         manifest_healed=plan.manifest_healed,
         shim_updated=plan.shim_updated,
         trigger=trigger,
-        pi_installed=plan.pi_installed,
+        pi_installed=pi_verified_final,
         hash_inputs_changed=hash_inputs_changed,
         diff_requested=diff_requested,
         upgrade_target=upgrade_target,
