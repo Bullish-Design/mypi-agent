@@ -30,15 +30,11 @@ surface ShellEntrySurface {
         ShellEntered()
         DesiredStateChanged()
 
-    @guarantee VisibleBootstrap
-        -- R-021: Shell bootstrap must not silently swallow failures.
-        -- Errors are visible. Normal no-op shell entry is quiet.
-        -- Bootstrap does not repeatedly perform expensive network installs.
+    @guarantee ErrorVisibility
+        -- R-021: Bootstrap errors are visible. No silent failures.
 
-    @guarantee DirectPiExposure
-        -- P0.1: The shell adds .agents/pi/node_modules/.bin to PATH,
-        -- exposing the upstream pi binary directly. No pi-agent wrapper
-        -- is generated or required for the default path.
+    @guarantee DirectPiPath
+        -- P0.1: Upstream pi exposed on PATH via node_modules/.bin/pi
 }
 
 -- Main mypi command surface
@@ -48,21 +44,9 @@ surface MypiCommand {
 
     provides:
         MypiInvoked()
-
-    exposes:
-        SecretRuntimePolicy.runtime_env_load_attempted
-        SecretRuntimePolicy.runtime_env_load_completed
-        SecretRuntimePolicy.config_write_attempted
-        SecretRuntimePolicy.config_write_blocked
-        SecretRuntimePolicy.secrets_available_at_evaluation_time
-        SecretRuntimePolicy.secrets_written_to_generated_config
-        SecretRuntimePolicy.missing_env_files_warning
-        SecretRuntimePolicy.warning_reason_missing_env_files_only
 }
 
--- P0.1/P0.2: mypi pi command - passthrough to upstream Pi CLI.
--- Replaces the old AgentCommandSurface. The upstream CLI is "pi",
--- not "pi-agent". mypi pi is an optional passthrough alias.
+-- P0.1/P0.2: mypi pi passthrough to upstream Pi CLI
 
 surface PiCommandSurface {
     facing _: core/PiExecutable
@@ -70,19 +54,8 @@ surface PiCommandSurface {
     provides:
         PiRequested(args: List<String>)
 
-    exposes:
-        core/PiExecutable.installed
-        core/PiExecutable.path_exists
-        core/PiExecutable.is_executable
-        core/PiExecutable.version_check_passed
-
     @guarantee PiPassthrough
-        -- P0.2: mypi pi forwards ALL arguments to the upstream Pi executable,
-        -- including unknown flags like --version, --mode rpc, -p "prompt".
-        -- Uses Typer context_settings with allow_extra_args and
-        -- ignore_unknown_options. Exit code is preserved from the Pi process.
-        -- If Pi is not installed, emits a clear error directing
-        -- the user to run mypi sync.
+        -- P0.2: All arguments forwarded to upstream Pi, preserving exit code
 }
 
 rule PiLaunchesPi {
@@ -120,37 +93,14 @@ surface SyncCommandSurface {
         SyncRequested(explicit: true, repair_shim: false, diff_requested: true, trigger: manual)
         SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: shell)
 
-    exposes:
-        SettingsShim.classification
-        SyncRun.explicit
-        SyncRun.repair_shim
-        SyncRun.diff_requested
-        SyncRun.trigger
-        SyncRun.completed
-        SyncRun.pi_installed
-        SyncRun.existing_files_overwritten
-        SyncRun.bootstrap_performed
-        SyncRun.manifest_healed
-        SyncRun.shim_updated
-        SyncRun.advisory_shown
-        SyncRun.upgrade_requires_explicit_sync
-        SyncRun.write_actions
-        InstalledManifest.exists
-        InstalledManifest.valid_json
-        InstalledManifest.schema_valid
-        SettingsShim.points_to_configured_root
-        BootstrapState.status
-        BootstrapState.pi_installed
-
     @guarantee NonDestructiveDefault
-        -- Explicit sync creates missing files and does not overwrite existing files by default.
+        -- Creates missing files, does not overwrite existing files by default
 
     @guarantee DiffIsReadOnly
-        -- R-010: When --diff is set, the sync plan is printed and no filesystem writes occur.
+        -- R-010: --diff mode prints plan without writing filesystem
 
     @guarantee SettingsSafety
-        -- P0.5: Sync will not silently adopt user-owned or invalid .pi/settings.json.
-        -- Requires --repair-shim to adopt/repair non-MYPI-managed settings.
+        -- P0.5: User-owned settings require --repair-shim flag
 }
 
 -- R-022: mypi needs-sync lightweight check
@@ -162,18 +112,11 @@ surface NeedsSyncSurface {
     provides:
         NeedsSyncRequested(trigger: shell | manual)
 
-    exposes:
-        NeedsSyncResult.sync_needed
-        NeedsSyncResult.reason
-
     @guarantee Lightweight
-        -- needs-sync compares a config hash/state file rather than
-        -- performing full sync planning. It does not mutate the filesystem.
+        -- Fast check without full sync planning
 
     @guarantee RuntimeStateAware
-        -- P0.6: needs-sync checks actual runtime invariants, not just
-        -- config hash. A missing or non-executable pi binary, failed
-        -- bootstrap status, or missing resource dirs all trigger sync.
+        -- P0.6: Checks actual runtime state, not just config hash
 }
 
 entity NeedsSyncResult {
@@ -216,17 +159,8 @@ surface DoctorCommandSurface {
     provides:
         DoctorRequested()
 
-    exposes:
-        DoctorRun.requested
-        DoctorRun.checks_completed
-        DoctorRun.error_count
-        DoctorRun.warning_count
-        DoctorRun.exit_code
-
     @guarantee RunsWhenBroken
-        -- P0.2 (cli review): Doctor should run even when the settings shim
-        -- is missing or invalid. Doctor diagnoses broken bootstrap states,
-        -- it should not be blocked by them.
+        -- Diagnoses broken states; not blocked by bootstrap failures
 }
 
 -- Paths command surface
@@ -236,14 +170,4 @@ surface PathsCommandSurface {
 
     provides:
         PathsRequested()
-
-    exposes:
-        PathsSurface.command_available
-        PathsSurface.project_root_exposed
-        PathsSurface.shim_path_exposed
-        PathsSurface.agent_root_exposed
-        PathsSurface.manifest_path_exposed
-        PathsSurface.pi_executable_path_exposed
-        PathsSurface.node_path_exposed
-        PathsSurface.npm_prefix_exposed
 }

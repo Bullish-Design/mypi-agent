@@ -1,16 +1,11 @@
 -- allium: 3
 
 use "./core.allium" as core
-use "./module.allium" as module
 use "./manifest.allium" as manifest
 use "./sync.allium" as sync
-use "./secrets.allium" as secrets
 use "./packages.allium" as packages
 use "./doctor.allium" as doctor
 use "./surfaces.allium" as surfaces
-use "./topology.allium" as topology
-use "./testing.allium" as testing
-use "./options.allium" as options
+use "./environment.allium" as environment
 use "./registry.allium" as registry
 use "./upgrade.allium" as upgrade
-use "./paths.allium" as paths

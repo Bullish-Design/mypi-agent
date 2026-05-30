@@ -1,102 +1,38 @@
 -- allium: 3
 
--- Registry and install metadata specification.
+-- Registry: records what was installed.
 -- R-015: Generated state must record meaningful source identity.
--- P1.6: Avoid timestamp churn on every sync.
 
 use "./core.allium" as core
 
-entity PrimitiveRegistry {
-    exists: Boolean
-    schema_version: Integer
-    has_core_group: Boolean
-}
-
--- R-015: Meaningful source identity
-
-entity PrimitiveInstallRecord {
+entity InstallRegistry {
     package_name: String
     package_version: String
-    npm_resolved_url: String?
-    npm_integrity_hash: String?
-    nix_store_path: String?
-    settings_hash: String
-    manifest_hash: String
-    source_hash: String
-    installed_at_rfc3339_utc: String
-    last_checked_at_rfc3339_utc: String
+    installed_integrity: String
 }
 
-surface PrimitiveRegistrySurface {
-    facing _: PrimitiveRegistry
+surface LocalRegistrySurface {
+    facing _: InstallRegistry
 
     provides:
-        SyncRequested(explicit: true, repair_shim: false, diff_requested: false, trigger: manual)
         SyncCompleted()
-}
-
-rule PrimitiveRegistryRequiredForSyncPlanning {
-    when: SyncRequested(explicit: true, repair_shim: false, _, _)
-    ensures: PrimitiveRegistry.exists = true
-    ensures: PrimitiveRegistry.schema_version = 1
-    ensures: PrimitiveRegistry.has_core_group = true
 }
 
 -- R-015: Record exact installed artifact identity
 
-rule PrimitiveInstallMetadataIsRecorded {
+rule RecordInstalledPackage {
     when: SyncCompleted()
-    for record in PrimitiveInstallRecord:
-        ensures: record.package_name != ""
-        ensures: record.package_version != ""
-        ensures: record.source_hash != ""
-        ensures: record.settings_hash != ""
-        ensures: record.manifest_hash != ""
-        ensures: record.installed_at_rfc3339_utc != ""
+    requires: core/PiExecutable.installed
+    ensures: InstallRegistry.package_name = core/PiPackage.name
+    ensures: InstallRegistry.package_version = core/PiExecutable.installed_version
+    ensures: InstallRegistry.installed_integrity = core/PiExecutable.installed_integrity_hash
     @guidance
-        -- The source_hash must identify the installed artifact, not just
-        -- hash the package name string (as the current implementation does).
-        -- Record:
-        --   exact package name and version from node_modules
-        --   npm resolved URL (from npm ls --json)
-        --   npm integrity hash (from package-lock.json or npm ls)
-        --   Nix store path (if using nix_packaged strategy)
-        --   hash of generated settings content
-        --   hash of generated manifest content
+        -- Record the exact package name, version, and integrity hash
+        -- from the installed artifact in node_modules.
 }
 
--- P1.6: Only update installed_at when material changes occur.
-
-rule RegistryTimestampPolicy {
-    when: SyncCompleted()
-    for record in PrimitiveInstallRecord:
-        ensures: record.last_checked_at_rfc3339_utc = current_time
-        ensures: if PackageIdentityChanged(record):
-            record.installed_at_rfc3339_utc = current_time
-    @guidance
-        -- P1.6: installed_at_rfc3339_utc should only update when npm install
-        -- actually changed or reinstalled the package. Use last_checked_at
-        -- for tracking when the record was last verified.
-        -- This prevents noisy state file churn on every sync.
-}
-
-invariant RegistrySchemaIsPinned {
-    PrimitiveRegistry.exists implies PrimitiveRegistry.schema_version = 1
-}
-
-invariant CoreGroupPresentWhenRegistryExists {
-    PrimitiveRegistry.exists implies PrimitiveRegistry.has_core_group
-}
-
-invariant SourceIdentityIsMeaningful {
-    -- R-015: source_hash must not be a hash of just the package name
-    for record in PrimitiveInstallRecord:
-        record.package_version != "" and record.settings_hash != ""
-}
-
-invariant InstalledAtOnlyChangesOnMaterialChange {
-    -- P1.6: installed_at timestamp is stable across idempotent syncs
-    for record in PrimitiveInstallRecord:
-        not PackageIdentityChanged(record) implies
-            record.installed_at_rfc3339_utc = record.installed_at_rfc3339_utc
+invariant RegistryRecordsExactInstall {
+    core/PiExecutable.installed implies
+        InstallRegistry.package_name != ""
+        and InstallRegistry.package_version != ""
 }

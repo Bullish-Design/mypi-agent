@@ -1,0 +1,160 @@
+-- allium: 3
+
+-- Shell environment and path resolution.
+-- R-004: Module provides npm-capable runtime.
+-- R-006: Repo-scoped npm configuration.
+-- R-016: Project root discovery.
+-- R-017: Operate inside devenv-managed projects only.
+-- P0.1: Expose upstream pi on PATH via node_modules/.bin, not a wrapper.
+-- P1.4: Validate agent root stays inside project root.
+
+use "./core.allium" as core
+
+-- Project root discovery
+
+entity ProjectRoot {
+    discovered: Boolean
+    source: env_variable | walk_upward | unresolved
+    path: String when discovered
+    is_devenv_managed: Boolean when discovered
+}
+
+-- Shell environment variables
+
+entity ShellEnvironment {
+    mypi_agent_root: String
+    mypi_project_root: String
+    mypi_agent_version: String
+    mypi_pi_package_name: String
+    mypi_pi_package_version: String?
+    npm_config_prefix: String
+    npm_config_cache: String
+    npm_config_audit: String
+    npm_config_fund: String
+    path_includes_node_modules_bin: Boolean
+}
+
+-- Module options from Nix
+
+entity ModuleOptions {
+    enable: Boolean
+    root: String
+    node_package: String
+    pi_package_name: String
+    pi_package_version: String?
+    npm_install_flags: Set<String>
+    bootstrap_mode: first_entry_only | manual_only | every_entry
+    allow_floating_pi_version: Boolean
+    mypi_agent_version: String
+}
+
+default ModuleOptions module_options = {
+    enable: true
+    root: ".agents/pi"
+    node_package: "pkgs.nodejs_22"
+    pi_package_name: "@earendil-works/pi-coding-agent"
+    pi_package_version: null
+    npm_install_flags: {"--ignore-scripts", "--no-audit", "--no-fund"}
+    bootstrap_mode: first_entry_only
+    allow_floating_pi_version: false
+}
+
+surface EnvironmentSurface {
+    facing _: ShellEnvironment
+
+    provides:
+        ShellEntered()
+        MypiInvoked()
+        PathsRequested()
+}
+
+-- R-016: Project root discovery
+
+rule DiscoverProjectRoot {
+    when: MypiInvoked()
+    ensures: if ShellEnvironment.mypi_project_root != "":
+        ProjectRoot.discovered = true
+        ProjectRoot.source = env_variable
+        ProjectRoot.path = ShellEnvironment.mypi_project_root
+    ensures: if ShellEnvironment.mypi_project_root = "":
+        WalkUpwardForRoot()
+}
+
+rule WalkUpwardDiscovery {
+    when: WalkUpwardForRoot()
+    ensures: if found_devenv_marker:
+        ProjectRoot.discovered = true
+        ProjectRoot.source = walk_upward
+        ProjectRoot.is_devenv_managed = true
+    ensures: if not found_devenv_marker:
+        ProjectRoot.discovered = false
+        ProjectRoot.source = unresolved
+}
+
+-- R-017: Reject unmanaged directories
+
+rule RejectUnmanagedDirectory {
+    when: MypiInvoked()
+    requires: not ProjectRoot.discovered or not ProjectRoot.is_devenv_managed
+    ensures: ProjectRootError(reason: "not_devenv_managed")
+}
+
+-- P1.4: Validate agent root containment
+
+rule ValidateAgentRootContainment {
+    when: MypiInvoked()
+    requires: ProjectRoot.discovered
+    ensures: if AgentRootEscapesProject():
+        ProjectRootError(reason: "agent_root_outside_project")
+}
+
+-- R-004: Module provides node and npm on PATH
+
+rule ModuleProvidesNodeRuntime {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: NodeRuntime.node_available = true
+    ensures: NodeRuntime.npm_available = true
+    ensures: NodeRuntime.npx_available = true
+}
+
+-- R-006: npm configuration must be repo-scoped
+
+rule ModuleConfiguresNpmScope {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ShellEnvironment.mypi_agent_root = ModuleOptions.root
+    ensures: ShellEnvironment.npm_config_prefix = ModuleOptions.root + "/npm-global"
+    ensures: ShellEnvironment.npm_config_cache = ModuleOptions.root + "/.npm-cache"
+    ensures: ShellEnvironment.npm_config_audit = "false"
+    ensures: ShellEnvironment.npm_config_fund = "false"
+    ensures: NpmScope.prefix_is_project_local = true
+    ensures: NpmScope.cache_is_project_local = true
+    ensures: NpmScope.audit_disabled = true
+    ensures: NpmScope.fund_disabled = true
+}
+
+-- P0.1: Expose upstream pi via PATH
+
+rule ModuleExposesUpstreamPi {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ShellEnvironment.path_includes_node_modules_bin = true
+}
+
+-- P1.4: Validate root is project-relative
+
+invariant RootIsProjectRelative {
+    ModuleOptions.enable implies
+        not ModuleOptions.root.starts_with("/")
+        and not ModuleOptions.root.contains("..")
+}
+
+invariant AgentRootContainedInProject {
+    ProjectRoot.discovered implies not AgentRootEscapesProject()
+}
+
+invariant SubdirectoryInvocationUsesProjectRoot {
+    ProjectRoot.discovered implies
+        AgentRoot.path = ProjectRoot.path + "/" + ModuleOptions.root
+}

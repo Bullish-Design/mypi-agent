@@ -83,18 +83,14 @@ entity SyncRun {
     bootstrap_performed: Boolean
     manifest_healed: Boolean
     shim_updated: Boolean
-    advisory_shown: Boolean
     write_actions: List<WriteAction>
     filesystem_mutated: Boolean when diff_requested
 }
 
 entity SecretRuntimePolicy {
-    missing_env_files_warning: Boolean
     secrets_written_to_generated_config: Boolean
     secrets_available_at_evaluation_time: Boolean
-    config_write_attempted: Boolean
     config_write_blocked: Boolean
-    warning_reason_missing_env_files_only: Boolean
 }
 
 -- Safety invariants
@@ -145,12 +141,8 @@ invariant NoEvalTimeSecrets {
     not SecretRuntimePolicy.secrets_available_at_evaluation_time
 }
 
-invariant NoSecretConfigWrites {
-    SecretRuntimePolicy.config_write_attempted implies SecretRuntimePolicy.config_write_blocked
-}
-
-invariant EnvWarningScope {
-    SecretRuntimePolicy.missing_env_files_warning implies SecretRuntimePolicy.warning_reason_missing_env_files_only
+invariant SecretConfigWritesBlocked {
+    SecretRuntimePolicy.config_write_blocked
 }
 
 -- P0.3: Bootstrap is only completed when pi is actually installed and executable.

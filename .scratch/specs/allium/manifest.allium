@@ -76,11 +76,4 @@ invariant ManifestHasRequiredFields {
     InstalledManifest.schema_valid implies
         Manifest.pi_package != ""
         and Manifest.generated_by = "mypi-agent"
-        and Manifest.schema_version = 1
-}
-
-invariant ManifestAndDoctorShareSchema {
-    -- doctor and sync must use the same manifest schema
-    -- This is enforced by both referencing the Manifest entity
-    InstalledManifest.schema_valid = (Manifest.schema_version = 1 and Manifest.pi_package != "")
 }
