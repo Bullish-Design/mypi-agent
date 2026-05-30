@@ -30,10 +30,37 @@ let
       ''
     else
       "";
+
+  usageCheckCmd =
+    if cfg.showUsageOnEntry then
+      ''
+        # Check configuration and print usage instructions
+        if mypi doctor >/dev/null 2>&1; then
+          echo ""
+          echo "  ✓ MYPI agent is configured and ready."
+        else
+          echo ""
+          echo "  ⚠️  MYPI agent is not fully configured."
+          echo "     Run \`mypi doctor\` for details, or \`mypi sync\` to set up."
+        fi
+        echo ""
+        echo "  Quick reference:"
+        echo "    mypi sync     — Bootstrap/sync the Pi agent"
+        echo "    mypi doctor   — Check configuration status"
+        echo "    mypi pi       — Run Pi (with SecretSpec secrets)"
+        echo "    mypi agent    — Run Pi directly"
+        echo ""
+      ''
+    else
+      "";
 in
 {
   options.piAgent = {
-    enable = lib.mkEnableOption "MYPI agent tooling";
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to enable MYPI agent tooling.";
+    };
 
     root = lib.mkOption {
       type = lib.types.str;
@@ -89,6 +116,12 @@ in
       type = lib.types.bool;
       default = true;
       description = "Run the pi command through SecretSpec for runtime secret injection.";
+    };
+
+    showUsageOnEntry = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Print configuration status and quick-reference usage guide on shell entry.";
     };
   };
 
@@ -178,23 +211,7 @@ in
     enterShell = lib.mkAfter ''
       ${bootstrapCmd}
       ${secretspecSetupCmd}
-
-      # Check configuration and print usage instructions
-      if mypi doctor >/dev/null 2>&1; then
-        echo ""
-        echo "  ✓ MYPI agent is configured and ready."
-      else
-        echo ""
-        echo "  ⚠️  MYPI agent is not fully configured."
-        echo "     Run \`mypi doctor\` for details, or \`mypi sync\` to set up."
-      fi
-      echo ""
-      echo "  Quick reference:"
-      echo "    mypi sync     — Bootstrap/sync the Pi agent"
-      echo "    mypi doctor   — Check configuration status"
-      echo "    mypi pi       — Run Pi (with SecretSpec secrets)"
-      echo "    mypi agent    — Run Pi directly"
-      echo ""
+      ${usageCheckCmd}
     '';
 
     profiles.pi.module = {

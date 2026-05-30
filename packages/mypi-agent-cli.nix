@@ -2,7 +2,7 @@
 
 python313Packages.buildPythonApplication {
   pname = "mypi-agent";
-  version = "0.3.3";
+  version = "0.3.4";
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
