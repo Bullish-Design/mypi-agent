@@ -385,6 +385,18 @@ def run_sync(
     diff_requested: bool = False,
     upgrade_target: str = "all",
 ) -> SyncResult:
+    if not diff_requested and not repair_shim and paths.settings_path.exists():
+        classification = _classify_file(
+            paths.settings_path,
+            _settings_payload(paths.agent_root.relative_to(paths.project_root).as_posix()),
+            MANAGED_SETTINGS_KEYS,
+        )
+        if classification in ("user_owned", "invalid_json"):
+            raise RuntimeError(
+                "error: .pi/settings.json already exists and is not MYPI-managed.\n"
+                "Run `mypi sync --repair-shim` to adopt/repair the settings shim."
+            )
+
     plan = _build_sync_plan(paths, repair_shim=repair_shim, trigger=trigger, diff_requested=diff_requested)
     created: list[Path] = []
     write_actions: list[WriteAction] = []

@@ -34,14 +34,18 @@ def sync_command(
         raise typer.BadParameter("--trigger must be one of: manual, shell")
     paths = _resolve_paths(allow_unmanaged=allow_unmanaged)
     require_settings_shim_actor("SyncCommandSurface", build_settings_shim_actor(paths))
-    result = run_sync(
-        paths,
-        explicit=True,
-        repair_shim=repair_shim,
-        trigger=trigger,
-        diff_requested=diff_mode,
-        upgrade_target="all",
-    )
+    try:
+        result = run_sync(
+            paths,
+            explicit=True,
+            repair_shim=repair_shim,
+            trigger=trigger,
+            diff_requested=diff_mode,
+            upgrade_target="all",
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     if json_output:
         typer.echo(result.model_dump_json(indent=2))
         return

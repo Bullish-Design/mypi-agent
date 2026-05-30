@@ -146,6 +146,17 @@ def test_sync_classifies_settings_shim_states(tmp_path):
     assert invalid.primitive_file_classifications["settings_shim"] == "invalid_json"
 
 
+def test_user_owned_settings_requires_repair_shim(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    paths.settings_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.settings_path.write_text('{"customKey":"value"}\n', encoding="utf-8")
+    try:
+        run_sync(paths, explicit=True, repair_shim=False)
+        assert False, "expected RuntimeError for user-owned settings without --repair-shim"
+    except RuntimeError as exc:
+        assert "not MYPI-managed" in str(exc)
+
+
 def test_advisory_gated_on_hash_input_change(tmp_path):
     paths = Paths(project_root=tmp_path)
     first = run_sync(paths, explicit=True, repair_shim=False)
