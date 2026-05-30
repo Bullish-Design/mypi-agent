@@ -181,9 +181,9 @@ def test_sync_installs_pi_agent_with_fake_npm(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ.get('PATH', '')}")
 
     result = run_sync(paths, explicit=True, repair_shim=False)
-    launcher = paths.agent_root / "bin" / "pi-agent"
-    assert result.pi_agent_installed is True
-    assert launcher.exists()
+    pi_executable = paths.agent_root / "node_modules" / ".bin" / "pi"
+    assert result.pi_installed is True
+    assert pi_executable.exists()
     registry = json.loads(paths.primitive_registry_state_path.read_text(encoding="utf-8"))
     assert registry["schema_version"] == 1
     assert "core" in registry["groups"]

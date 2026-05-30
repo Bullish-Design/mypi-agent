@@ -38,7 +38,7 @@ class SyncResult(AlliumBase):
     manifest_healed: bool
     shim_updated: bool
     trigger: str
-    pi_agent_installed: bool
+    pi_installed: bool
     hash_inputs_changed: bool
     diff_requested: bool
     upgrade_target: str
@@ -61,7 +61,7 @@ class SyncPlan:
     would_create_count: int
     would_upgrade_count: int
     preserved_locally_modified_count: int
-    pi_agent_installed: bool
+    pi_installed: bool
     warnings: list[str]
     manifest_healed: bool
     shim_updated: bool
@@ -238,7 +238,7 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
     installed_version: str | None = None
     npm_resolved_url: str | None = None
     npm_integrity_hash: str | None = None
-    pi_agent_installed = False
+    pi_installed = False
 
     if not diff_requested:
         npm = shutil.which("npm")
@@ -257,7 +257,7 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
                 check=False,
             )
             if install.returncode == 0:
-                pi_agent_installed = True
+                pi_installed = True
                 package_json_path = paths.agent_root / "node_modules" / pi_package_name / "package.json"
                 payload = _read_json_or_none(package_json_path)
                 if isinstance(payload, dict) and isinstance(payload.get("version"), str):
@@ -329,7 +329,7 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
         would_create_count=would_create_count,
         would_upgrade_count=would_upgrade_count,
         preserved_locally_modified_count=preserved_locally_modified_count,
-        pi_agent_installed=pi_agent_installed,
+        pi_installed=pi_installed,
         warnings=warnings,
         manifest_healed=manifest_healed,
         shim_updated=shim_updated,
@@ -345,16 +345,6 @@ def _apply_sync_plan(paths: Paths, plan: SyncPlan) -> tuple[list[Path], list[Wri
         if not d.exists():
             d.mkdir(parents=True, exist_ok=True)
             created.append(d)
-
-    launcher = paths.agent_root / "bin" / "pi-agent"
-    launcher.parent.mkdir(parents=True, exist_ok=True)
-    if not launcher.exists():
-        created.append(launcher)
-    launcher.write_text(
-        "#!/usr/bin/env sh\nset -eu\nexec \"$(dirname \"$0\")/../node_modules/.bin/pi\" \"$@\"\n",
-        encoding="utf-8",
-    )
-    launcher.chmod(0o755)
 
     for path, payload in plan.file_payloads.items():
         existed_before = path.exists()
@@ -408,7 +398,7 @@ def run_sync(
         manifest_healed=plan.manifest_healed,
         shim_updated=plan.shim_updated,
         trigger=trigger,
-        pi_agent_installed=plan.pi_agent_installed,
+        pi_installed=plan.pi_installed,
         hash_inputs_changed=hash_inputs_changed,
         diff_requested=diff_requested,
         upgrade_target=upgrade_target,

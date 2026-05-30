@@ -22,18 +22,6 @@ let
     export MYPI_AGENT_ROOT="$root_rel"
     exec ${mypiPkg}/bin/mypi "$@"
   '';
-  piAgentBin = pkgs.writeShellScriptBin "pi-agent" ''
-    set -euo pipefail
-    root_rel=${cfgRootEscaped}
-    project_root="''${DEVENV_ROOT:-$PWD}"
-    launcher="$project_root/$root_rel/bin/pi-agent"
-    if [ ! -x "$launcher" ]; then
-      echo "pi-agent is not installed yet; run: mypi sync" >&2
-      exit 1
-    fi
-    exec "$launcher" "$@"
-  '';
-
   npmEnvCmd = ''
     root_rel=${cfgRootEscaped}
     project_root="''${DEVENV_ROOT:-$PWD}"
@@ -89,12 +77,6 @@ in
       description = "Additional flags passed to npm install for Pi package installation.";
     };
 
-    exposePiAgentShim = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Expose a compatibility pi-agent command.";
-    };
-
     bootstrap.mode = lib.mkOption {
       type = lib.types.enum [ "first_entry_only" "manual_only" "every_entry" ];
       default = "first_entry_only";
@@ -103,10 +85,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    packages = [ mypiBin cfg.nodePackage ] ++ lib.optional cfg.exposePiAgentShim piAgentBin;
+    packages = [ mypiBin cfg.nodePackage ];
 
     enterShell = lib.mkAfter ''
       ${npmEnvCmd}
+      export MYPI_AGENT_ROOT=${cfgRootEscaped}
+      export PATH="''${DEVENV_ROOT:-$PWD}/$MYPI_AGENT_ROOT/node_modules/.bin:$PATH"
       ${bootstrapCmd}
     '';
   };

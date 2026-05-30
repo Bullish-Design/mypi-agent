@@ -82,7 +82,7 @@ class Paths(AlliumBase):
 
     @property
     def pi_executable_path(self) -> Path:
-        return self.agent_root / "bin" / "pi-agent"
+        return self.agent_root / "node_modules" / ".bin" / "pi"
 
     def as_mapping(self) -> dict[str, str]:
         return {

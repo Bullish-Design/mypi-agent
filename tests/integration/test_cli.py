@@ -54,7 +54,7 @@ def test_cli_doctor_success_after_sync(tmp_path, monkeypatch):
     monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)
     assert sync_result.exit_code == 0
-    pi_executable = tmp_path / ".agents" / "pi" / "bin" / "pi-agent"
+    pi_executable = tmp_path / ".agents" / "pi" / "node_modules" / ".bin" / "pi"
     pi_executable.parent.mkdir(parents=True, exist_ok=True)
     pi_executable.write_text("#!/bin/sh\necho 1.2.3\n", encoding="utf-8")
     pi_executable.chmod(0o755)
@@ -89,7 +89,7 @@ def test_cli_doctor_json(tmp_path, monkeypatch):
     monkeypatch.setenv("NPM_CONFIG_PREFIX", str(tmp_path / ".agents" / "pi" / "npm-global"))
     sync_result = runner.invoke(app, ["sync"], catch_exceptions=False)
     assert sync_result.exit_code == 0
-    pi_executable = tmp_path / ".agents" / "pi" / "bin" / "pi-agent"
+    pi_executable = tmp_path / ".agents" / "pi" / "node_modules" / ".bin" / "pi"
     pi_executable.parent.mkdir(parents=True, exist_ok=True)
     pi_executable.write_text("#!/bin/sh\necho 1.2.3\n", encoding="utf-8")
     pi_executable.chmod(0o755)
@@ -106,7 +106,7 @@ def test_cli_paths_outputs_required_fields(tmp_path, monkeypatch):
     assert f"shim_path={tmp_path / '.pi' / 'settings.json'}" in result.stdout
     assert f"agent_root={tmp_path / '.agents' / 'pi'}" in result.stdout
     assert f"manifest_path={tmp_path / '.agents' / 'pi' / 'manifest.json'}" in result.stdout
-    assert f"pi_executable_path={tmp_path / '.agents' / 'pi' / 'bin' / 'pi-agent'}" in result.stdout
+    assert f"pi_executable_path={tmp_path / '.agents' / 'pi' / 'node_modules' / '.bin' / 'pi'}" in result.stdout
 
 
 def test_cli_paths_json_outputs_required_fields(tmp_path, monkeypatch):
@@ -118,7 +118,7 @@ def test_cli_paths_json_outputs_required_fields(tmp_path, monkeypatch):
     assert payload["shim_path"] == str(tmp_path / ".pi" / "settings.json")
     assert payload["agent_root"] == str(tmp_path / ".agents" / "pi")
     assert payload["manifest_path"] == str(tmp_path / ".agents" / "pi" / "manifest.json")
-    assert payload["pi_executable_path"] == str(tmp_path / ".agents" / "pi" / "bin" / "pi-agent")
+    assert payload["pi_executable_path"] == str(tmp_path / ".agents" / "pi" / "node_modules" / ".bin" / "pi")
 
 
 def test_cli_rejects_unmanaged_directory_without_override(tmp_path, monkeypatch):
