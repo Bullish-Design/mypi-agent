@@ -201,6 +201,16 @@ def test_sync_installs_pi_with_fake_npm(tmp_path, fake_npm):
     assert registry["installs"][0]["installed_at_rfc3339_utc"] != ""
 
 
+def test_registry_timestamp_stable_when_package_identity_unchanged(tmp_path, fake_npm):
+    paths = Paths(project_root=tmp_path)
+    run_sync(paths, explicit=True, repair_shim=False)
+    first = json.loads(paths.primitive_registry_state_path.read_text(encoding="utf-8"))
+    run_sync(paths, explicit=True, repair_shim=False)
+    second = json.loads(paths.primitive_registry_state_path.read_text(encoding="utf-8"))
+    assert first["installs"][0]["source_hash"] == second["installs"][0]["source_hash"]
+    assert first["installs"][0]["installed_at_rfc3339_utc"] == second["installs"][0]["installed_at_rfc3339_utc"]
+
+
 def test_sync_pinned_package_uses_name_at_version(tmp_path, monkeypatch):
     paths = Paths(project_root=tmp_path)
     monkeypatch.setenv("MYPI_PI_PACKAGE_NAME", "@earendil-works/pi-coding-agent")

@@ -93,6 +93,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !(lib.hasPrefix "/" cfg.root);
+        message = "piAgent.root must be project-relative, not absolute.";
+      }
+      {
+        assertion = builtins.match ".*\\.\\..*" cfg.root == null;
+        message = "piAgent.root must not contain '..' path traversal.";
+      }
+    ];
+
     packages = [ mypiBin cfg.nodePackage ];
 
     enterShell = lib.mkAfter ''

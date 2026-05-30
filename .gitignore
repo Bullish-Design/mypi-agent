@@ -25,7 +25,8 @@ uv.lock
 .agents/pi/.npm-cache/
 .agents/pi/bin/
 .agents/pi/.state/
-
+.pi/**
+.agents/pi/**
 
 # C extensions
 *.so

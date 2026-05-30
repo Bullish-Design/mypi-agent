@@ -3,7 +3,14 @@
 python313Packages.buildPythonApplication {
   pname = "mypi-agent";
   version = "0.1.0";
-  src = ../.;
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../pyproject.toml
+      ../README.md
+      ../src
+    ];
+  };
   pyproject = true;
 
   build-system = [
@@ -18,7 +25,7 @@ python313Packages.buildPythonApplication {
   pythonImportsCheck = [ "mypi_agent" ];
 
   meta = with lib; {
-    description = "MYPI-AGENT CLI";
+    description = "Repo-scoped MYPI/Pi bootstrap CLI for devenv/Nix";
     license = licenses.mit;
     platforms = platforms.all;
   };

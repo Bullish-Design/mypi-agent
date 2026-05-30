@@ -20,6 +20,7 @@ def test_doctor_reports_missing_artifacts(tmp_path):
     assert result.checks_completed is True
     assert result.error_count == len(result.errors)
     assert result.computed_error_count == len(result.errors)
+    assert result.warning_count >= 0
     assert result.exit_code == 1
 
 
@@ -88,3 +89,16 @@ def test_doctor_reports_manifest_schema_invalid(tmp_path, monkeypatch):
     paths.manifest_path.write_text('{"schema_version": 2}\n', encoding="utf-8")
     result = run_doctor(paths)
     assert "manifest_schema_invalid" in result.errors
+
+
+def test_doctor_warns_when_npm_command_missing(tmp_path, monkeypatch):
+    paths = Paths(project_root=tmp_path)
+    monkeypatch.setenv("NPM_CONFIG_PREFIX", str(paths.agent_root / "npm-global"))
+    run_sync(paths, explicit=True, repair_shim=False)
+    import json
+
+    payload = json.loads(paths.settings_path.read_text(encoding="utf-8"))
+    payload.pop("npmCommand", None)
+    paths.settings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    result = run_doctor(paths)
+    assert "missing_npm_command" in result.warnings
