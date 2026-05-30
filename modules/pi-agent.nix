@@ -20,6 +20,16 @@ let
           fi
         fi
       '';
+
+  secretspecSetupCmd =
+    if cfg.secrets.enable then
+      ''
+        if ! mypi secretspec-setup; then
+          echo "warning: mypi secretspec-setup had errors" >&2
+        fi
+      ''
+    else
+      "";
 in
 {
   options.piAgent = {
@@ -153,8 +163,21 @@ in
         '';
     };
 
+    scripts.secretspec-setup = {
+      description = "Verify and initialise SecretSpec for this project";
+      exec = ''
+        set -euo pipefail
+        export MYPI_NPM_INSTALL_FLAGS=${lib.escapeShellArg (builtins.toJSON cfg.npmInstallFlags)}
+        if [ -n "''${DEVENV_ROOT:-}" ]; then
+          cd "$DEVENV_ROOT"
+        fi
+        exec ${mypiPkg}/bin/mypi secretspec-setup "$@"
+      '';
+    };
+
     enterShell = lib.mkAfter ''
       ${bootstrapCmd}
+      ${secretspecSetupCmd}
     '';
 
     profiles.pi.module = {

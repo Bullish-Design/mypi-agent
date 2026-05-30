@@ -6,6 +6,7 @@ import typer
 
 from .doctor import run_doctor
 from .models import Paths
+from .secretspec_setup import run_secretspec_setup
 from .sync import run_sync
 from .sync import needs_sync
 from .surfaces_runtime import build_settings_shim_actor, require_settings_shim_actor
@@ -60,6 +61,20 @@ def sync_command(
         )
     if result.advisory_shown and result.upgrade_requires_explicit_sync:
         typer.echo("advisory: upgrades require explicit sync")
+
+
+@app.command("secretspec-setup")
+def secretspec_setup_command(
+    json_output: bool = typer.Option(False, "--json"),
+    allow_unmanaged: bool = typer.Option(False, "--allow-unmanaged"),
+) -> None:
+    paths = _resolve_paths(allow_unmanaged=allow_unmanaged)
+    result = run_secretspec_setup(paths)
+    if json_output:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    for warning in result.warnings:
+        typer.echo(f"warning: {warning}")
 
 
 @app.command("doctor")

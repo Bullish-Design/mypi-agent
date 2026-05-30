@@ -9,3 +9,4 @@ use "./surfaces.allium" as surfaces
 use "./environment.allium" as environment
 use "./registry.allium" as registry
 use "./upgrade.allium" as upgrade
+use "./secretspec.allium" as secretspec
