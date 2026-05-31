@@ -69,6 +69,14 @@ def run_doctor(paths: Paths) -> DoctorResult:
     if not paths.agent_root.exists():
         errors.append("missing_agent_root")
         diagnostics.append({"code": "missing_agent_root", "severity": "error"})
+    if not paths.devenv_local_yaml_path.exists():
+        warnings.append("missing_devenv_local_yaml")
+        diagnostics.append({"code": "missing_devenv_local_yaml", "severity": "warning"})
+
+    if not os.environ.get("DEVENV_ROOT"):
+        warnings.append("not_running_via_devenv_shell")
+        diagnostics.append({"code": "not_running_via_devenv_shell", "severity": "warning"})
+
     manifest_status = _manifest_status(paths)
     if manifest_status == "invalid_manifest":
         errors.append("invalid_manifest")

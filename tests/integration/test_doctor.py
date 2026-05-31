@@ -102,3 +102,15 @@ def test_doctor_warns_when_npm_command_missing(tmp_path, monkeypatch):
     paths.settings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     result = run_doctor(paths)
     assert "missing_npm_command" in result.warnings
+
+
+def test_doctor_warns_when_devenv_local_yaml_missing(tmp_path):
+    result = run_doctor(Paths(project_root=tmp_path))
+    assert "missing_devenv_local_yaml" in result.warnings
+
+
+def test_doctor_does_not_warn_when_devenv_local_yaml_exists(tmp_path):
+    paths = Paths(project_root=tmp_path)
+    paths.devenv_local_yaml_path.write_text("secretspec:\n  provider: 1password\n", encoding="utf-8")
+    result = run_doctor(paths)
+    assert "missing_devenv_local_yaml" not in result.warnings

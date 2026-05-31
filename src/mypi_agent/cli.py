@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 
 import typer
 
@@ -90,6 +91,18 @@ def doctor_command(json_output: bool = typer.Option(False, "--json")) -> None:
     for error in result.errors:
         typer.echo(f"error: {error}")
     raise typer.Exit(code=result.exit_code)
+
+
+@app.command("agent")
+def agent_command() -> None:
+    paths = _resolve_paths()
+    pi_path = paths.pi_executable_path
+    if not pi_path.exists():
+        typer.echo("error: Pi is not installed. Run: mypi sync")
+        raise typer.Exit(code=1)
+    raise typer.Exit(
+        code=subprocess.run([str(pi_path)], check=False).returncode,
+    )
 
 
 @app.command("paths")

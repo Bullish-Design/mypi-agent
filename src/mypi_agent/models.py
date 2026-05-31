@@ -87,6 +87,10 @@ class Paths(MypiBaseModel):
     def pi_executable_path(self) -> Path:
         return self.agent_root / "node_modules" / ".bin" / "pi"
 
+    @property
+    def devenv_local_yaml_path(self) -> Path:
+        return self.project_root / "devenv.local.yaml"
+
     def as_mapping(self) -> dict[str, str]:
         return {
             "project_root": str(self.project_root),
