@@ -45,12 +45,36 @@ let
         fi
         echo ""
         echo "  Quick reference:"
-        echo "    mypi sync     — Bootstrap/sync the Pi agent"
-        echo "    mypi doctor   — Check configuration status"
-        echo "    mypi pi       — Run Pi (with SecretSpec secrets)"
-        echo "    mypi agent    — Run Pi directly"
+        echo "    mypi sync       — Bootstrap/sync the Pi agent"
+        echo "    mypi doctor     — Check configuration status"
+        echo "    mypi secrets    — Manage per-repo API key secrets"
+        echo "    mypi secrets check — Verify secrets are configured"
+        echo "    mypi pi         — Run Pi (with SecretSpec secrets)"
+        echo "    mypi agent      — Run Pi directly"
         echo ""
       ''
+    else
+      "";
+
+  # -- Secrets env vars --
+  secretsEnv =
+    let
+      profileEnv = lib.optionalString (cfg.secrets.profile != null) ''
+        export MYPI_SECRETS_PROFILE=${lib.escapeShellArg cfg.secrets.profile}
+      '';
+      rootEnv = lib.optionalString (cfg.secrets.defaultRoot != null) ''
+        export MYPI_SECRETS_ROOT=${lib.escapeShellArg cfg.secrets.defaultRoot}
+      '';
+      slugEnv = lib.optionalString (cfg.secrets.projectSlug != null) ''
+        export MYPI_SECRETS_SLUG=${lib.escapeShellArg cfg.secrets.projectSlug}
+      '';
+    in
+    profileEnv + rootEnv + slugEnv;
+
+  # Extra profile arg for the pi wrapper when secrets.profile is explicitly set
+  secretsProfileArg =
+    if cfg.secrets.enable && cfg.secrets.profile != null then
+      "--profile ${lib.escapeShellArg cfg.secrets.profile} "
     else
       "";
 in
@@ -118,6 +142,35 @@ in
       description = "Run the pi command through SecretSpec for runtime secret injection.";
     };
 
+    secrets.profile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        SecretSpec profile name to use (e.g. "default", "ci", "offline").
+        When null, the profile is read from devenv.local.yaml or defaults to "default".
+      '';
+    };
+
+    secrets.projectSlug = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Explicit repo slug for secret storage directory naming.
+        When null, the slug is auto-derived from the project directory name.
+        Set this if the directory name is ambiguous or changes between machines.
+      '';
+    };
+
+    secrets.defaultRoot = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Override the base directory for per-repo secret storage.
+        Defaults to XDG_CONFIG_HOME/mypi-agent/secrets or ~/.config/mypi-agent/secrets.
+        Useful for containers (e.g. /run/secrets/mypi-agent) or multi-user setups.
+      '';
+    };
+
     showUsageOnEntry = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -169,8 +222,6 @@ in
         let
           providerArg = lib.optionalString ((config.secretspec.provider or null) != null)
             "--provider ${lib.escapeShellArg config.secretspec.provider} ";
-          profileArg = lib.optionalString ((config.secretspec.profile or null) != null)
-            "--profile ${lib.escapeShellArg config.secretspec.profile} ";
         in
         ''
           set -euo pipefail
@@ -189,7 +240,14 @@ in
           fi
 
           ${if cfg.secrets.enable then ''
-            exec secretspec run ${providerArg}${profileArg}-- "$real_pi" "$@"
+            # Use explicit profile from Nix option if set, otherwise let
+            # secretspec/cli resolve it from devenv.local.yaml
+            profile_flag=""
+            if [ -n "''${MYPI_SECRETS_PROFILE:-}" ]; then
+              profile_flag="--profile $MYPI_SECRETS_PROFILE"
+            fi
+
+            exec secretspec run ${providerArg}''${profile_flag} -- "$real_pi" "$@"
           '' else ''
             exec "$real_pi" "$@"
           ''}
@@ -209,6 +267,7 @@ in
     };
 
     enterShell = lib.mkAfter ''
+      ${secretsEnv}
       ${bootstrapCmd}
       ${secretspecSetupCmd}
       ${usageCheckCmd}

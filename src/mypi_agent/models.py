@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from .base_model import MypiBaseModel
+from .slug import derive_slug
 
 RESOURCE_LITERALS = Literal["extensions", "skills", "prompts", "themes"]
 
@@ -16,6 +17,23 @@ class Manifest(MypiBaseModel):
     pi_version: str | None = None
     node_version: str | None = None
     generated_by: str = "mypi-agent"
+
+
+def _resolve_secrets_root_from_env(project_root: Path) -> Path:
+    """Resolve secrets root using env var or default ~/.config path.
+
+    Mirrors the logic in secrets.resolve_secrets_root but without
+    importing the full secrets module (avoids circular deps).
+    """
+    env_override = os.environ.get("MYPI_SECRETS_ROOT")
+    if env_override:
+        return Path(env_override).resolve()
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        base = Path(xdg)
+    else:
+        base = Path.home() / ".config"
+    return (base / "mypi-agent" / "secrets").resolve()
 
 
 class Paths(MypiBaseModel):
@@ -91,6 +109,26 @@ class Paths(MypiBaseModel):
     def devenv_local_yaml_path(self) -> Path:
         return self.project_root / "devenv.local.yaml"
 
+    @property
+    def secrets_slug(self) -> str:
+        """Derive a stable repo slug for secret storage paths."""
+        return derive_slug(self.project_root)
+
+    @property
+    def secrets_root(self) -> Path:
+        """Resolve the base directory for per-repo secret storage."""
+        return _resolve_secrets_root_from_env(self.project_root)
+
+    @property
+    def secrets_dir_path(self) -> Path:
+        """Per-repo secrets directory (e.g. ~/.config/mypi-agent/secrets/<slug>/)."""
+        return self.secrets_root / self.secrets_slug
+
+    @property
+    def dotenv_path(self) -> Path:
+        """Expected path to the .env file for this repo."""
+        return self.secrets_dir_path / ".env"
+
     def as_mapping(self) -> dict[str, str]:
         return {
             "project_root": str(self.project_root),
@@ -98,4 +136,9 @@ class Paths(MypiBaseModel):
             "agent_root": str(self.agent_root),
             "manifest_path": str(self.manifest_path),
             "pi_executable_path": str(self.pi_executable_path),
+            "secrets_slug": self.secrets_slug,
+            "secrets_root": str(self.secrets_root),
+            "secrets_dir": str(self.secrets_dir_path),
+            "dotenv_path": str(self.dotenv_path),
+            "devenv_local_yaml_path": str(self.devenv_local_yaml_path),
         }
