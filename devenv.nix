@@ -1,9 +1,6 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 {
   imports = [ ./modules/pi-agent.nix ];
-  piAgent.secrets = {
-    enable = true;
-  };
 
   packages = [
     pkgs.secretspec
