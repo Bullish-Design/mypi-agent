@@ -7,6 +7,7 @@
 -- R-017: Operate inside devenv-managed projects only.
 -- P1.4: Validate agent root stays inside project root.
 -- Pi is accessed via scripts.pi wrapper, not PATH.
+-- PI_CODING_AGENT_DIR is project-local for independent Pi state per repo.
 
 use "./core.allium" as core
 
@@ -31,6 +32,7 @@ entity ShellEnvironment {
     npm_config_cache: String
     npm_config_audit: String
     npm_config_fund: String
+    pi_coding_agent_dir: String
     path_includes_node_modules_bin: Boolean
     telegram_bot_token_available: Boolean
 }
@@ -49,6 +51,8 @@ entity ModuleOptions {
     secrets_enable: Boolean
     telegram_enable: Boolean
     mypi_agent_version: String
+    settings: Map<String, Any>
+    state_seed_dir: String?
 }
 
 default ModuleOptions module_options = {
@@ -62,6 +66,8 @@ default ModuleOptions module_options = {
     allow_floating_pi_version: false
     secrets_enable: true
     telegram_enable: true
+    settings: {}
+    state_seed_dir: null
 }
 
 surface EnvironmentSurface {
@@ -137,6 +143,21 @@ rule ModuleConfiguresNpmScope {
     ensures: NpmScope.cache_is_project_local = true
     ensures: NpmScope.audit_disabled = true
     ensures: NpmScope.fund_disabled = true
+}
+
+-- Pi state directory is project-local so each repo gets independent
+-- Pi settings, locks, sessions, and telegram singleton state.
+
+rule ModuleConfiguresPiStateDir {
+    when: ShellEntered()
+    requires: ModuleOptions.enable
+    ensures: ShellEnvironment.pi_coding_agent_dir =
+        ProjectRoot.path + "/" + ModuleOptions.root + "/.pi-state"
+}
+
+invariant PiStateDirIsProjectLocal {
+    ModuleOptions.enable implies
+        ShellEnvironment.pi_coding_agent_dir.starts_with(ProjectRoot.path)
 }
 
 -- node_modules/.bin is NOT on PATH. Pi is accessed via scripts.pi wrapper.

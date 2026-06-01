@@ -87,6 +87,17 @@ entity SyncRun {
     filesystem_mutated: Boolean when diff_requested
 }
 
+-- Project-local Pi state directory.
+-- PI_CODING_AGENT_DIR points here so Pi stores settings, locks,
+-- sessions, and extension state per-repo rather than globally.
+
+entity PiStateDir {
+    exists: Boolean
+    path: String
+    settings_seeded: Boolean
+    resources_synced: Boolean
+}
+
 -- SecretSpec is the sole API-key boundary. The scripts.pi wrapper
 -- uses `secretspec run` to inject keys into the Pi process only.
 -- No mypi command or generated config receives secret values.

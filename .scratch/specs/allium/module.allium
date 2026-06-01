@@ -39,6 +39,7 @@ entity ConsumerProject {
     has_node_on_path: Boolean
     has_npm_on_path: Boolean
     has_pi_agent_root: Boolean
+    has_pi_state_dir: Boolean
     has_settings_shim: Boolean
     evaluates_allium_options: Boolean
     requires_allium_env_input: Boolean
@@ -60,6 +61,7 @@ surface DevenvImportSurface {
         consumer.has_node_on_path
         consumer.has_npm_on_path
         consumer.has_pi_agent_root
+        consumer.has_pi_state_dir
         consumer.has_settings_shim
 
     @guarantee PiProfileAvailable
@@ -77,6 +79,12 @@ surface DevenvImportSurface {
         -- A consumer importing mypi-agent never evaluates allium.enable,
         -- allium.specsDir, allium.codexSkills, or any allium-env option.
 
+    @guarantee ProjectLocalPiState
+        -- PI_CODING_AGENT_DIR is set to $DEVENV_ROOT/$root/.pi-state
+        -- so each repo gets independent Pi settings, locks, sessions,
+        -- and telegram singleton state. Multiple repos can run
+        -- pi-telegram simultaneously with separate bot tokens.
+
     @guarantee PiViaSecretSpecWrapper
         -- The consumer gets pi as a scripts.pi wrapper that calls
         -- the real binary by absolute path through `secretspec run`.
@@ -93,6 +101,7 @@ rule RootImportExposesModule {
     ensures: ConsumerProject.has_node_on_path = true
     ensures: ConsumerProject.has_npm_on_path = true
     ensures: ConsumerProject.has_pi_agent_root = true
+    ensures: ConsumerProject.has_pi_state_dir = true
     ensures: ConsumerProject.has_settings_shim = true
 }
 

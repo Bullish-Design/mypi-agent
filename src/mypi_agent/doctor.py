@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+
 from pydantic import ValidationError
 
 from .base_model import MypiBaseModel
@@ -40,9 +41,36 @@ def _telegram_enabled() -> bool:
 
 
 def _telegram_paired(paths) -> bool:
-    """Check if the user has completed the Telegram pairing flow."""
+    """Check if the user has completed the Telegram pairing flow.
+
+    Reads the pi-telegram config (telegram.json) to detect pairing, and
+    auto-creates the .mypi/telegram.paired marker file if pairing is
+    confirmed but the marker is missing.
+    """
     paired_file = paths.project_root / ".mypi" / "telegram.paired"
-    return paired_file.exists()
+    if paired_file.exists():
+        return True
+
+    # Check pi-telegram's own config for a set allowedUserId
+    telegram_config_path = paths.project_root / paths.agent_root / ".pi-state" / "telegram.json"
+    if not telegram_config_path.exists():
+        # Also check the default location: PI_CODING_AGENT_DIR/telegram.json
+        agent_dir = os.environ.get("PI_CODING_AGENT_DIR", "")
+        if agent_dir:
+            telegram_config_path = Path(agent_dir) / "telegram.json"
+
+    if telegram_config_path.exists():
+        try:
+            cfg = json.loads(telegram_config_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            cfg = {}
+        if isinstance(cfg, dict) and cfg.get("allowedUserId") is not None:
+            # Pairing confirmed — create the marker file automatically
+            paired_file.parent.mkdir(parents=True, exist_ok=True)
+            paired_file.write_text("", encoding="utf-8")
+            return True
+
+    return False
 
 
 class DoctorResult(MypiBaseModel):

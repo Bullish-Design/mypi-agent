@@ -237,6 +237,39 @@ rule SyncReleaseLock {
         -- Lock is released even on failure (use try/finally).
 }
 
+-- Pi state directory seeding.
+-- On shell entry, PI_CODING_AGENT_DIR is created and populated with
+-- settings.json (from piAgent.settings) and resource directories
+-- (extensions/, skills/, prompts/, scripts/) from piAgent.stateSeedDir.
+-- This runs before bootstrap so Pi has a valid state dir on first use.
+
+rule SyncSeedsPiStateDir {
+    when: ShellEntered()
+    requires: core/ModuleOptions.enable
+    ensures: core/PiStateDir.exists = true
+    ensures: core/PiStateDir.path =
+        core/AgentRoot.path + "/.pi-state"
+    ensures: if core/ModuleOptions.settings != {}:
+        core/PiStateDir.settings_seeded = true
+    ensures: if core/ModuleOptions.state_seed_dir != null:
+        core/PiStateDir.resources_synced = true
+    @guidance
+        -- 1. mkdir -p $PI_CODING_AGENT_DIR
+        -- 2. If piAgent.settings is non-empty, serialize to JSON and
+        --    write to settings.json (only if content changed).
+        -- 3. If piAgent.stateSeedDir is set, rsync --delete each
+        --    subdirectory (extensions/, skills/, prompts/, scripts/)
+        --    into the Pi state dir.
+        -- 4. Runs in enterShell before bootstrapCmd.
+}
+
+invariant PiStateDirSettingsIdempotent {
+    -- Settings are only written when content differs from disk.
+    -- Avoids unnecessary disk writes and timestamp churn.
+    core/PiStateDir.settings_seeded implies
+        core/PiStateDir.exists
+}
+
 -- Managed resource syncing.
 -- Skills and prompt templates are copied from the repo's managed
 -- source directories (.agents/skills/, .agents/prompts/) into the

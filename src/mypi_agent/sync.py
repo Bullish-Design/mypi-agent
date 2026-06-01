@@ -178,6 +178,13 @@ def _load_lockfile_package_metadata(paths: Paths, pi_package_name: str) -> tuple
     )
 
 
+GITIGNORE_PI_ENTRIES = [
+    ".pi/**",
+    ".agents/pi/**",
+]
+"""Gitignore patterns to ensure for the pi agent lifecycle."""
+
+
 def _classify_file(path: Path, expected_payload: object, managed_keys: list[str] | None = None) -> str:
     if not path.exists():
         return "missing"
@@ -406,6 +413,25 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
     )
 
 
+def _ensure_gitignore_entries(paths: Paths) -> bool:
+    """Append pi agent gitignore patterns if missing. Returns True if modified."""
+    gitignore = paths.project_root / ".gitignore"
+    required = GITIGNORE_PI_ENTRIES
+
+    if not gitignore.exists():
+        gitignore.write_text("\n".join(required) + "\n", encoding="utf-8")
+        return True
+
+    existing = set(gitignore.read_text(encoding="utf-8").splitlines())
+    additions = [e for e in required if e not in existing]
+    if not additions:
+        return False
+
+    with gitignore.open("a", encoding="utf-8") as f:
+        f.write("\n" + "\n".join(additions) + "\n")
+    return True
+
+
 def _apply_sync_plan(paths: Paths, plan: SyncPlan) -> tuple[list[Path], list[WriteAction]]:
     created: list[Path] = []
     write_actions: list[WriteAction] = []
@@ -492,6 +518,14 @@ def run_sync(
 
     hash_inputs_changed = plan.bootstrap_performed or plan.shim_updated or plan.manifest_healed
     existing_files_overwritten = any(a.existed_before and a.content_changed for a in write_actions)
+    # Ensure gitignore has pi agent entries (best-effort)
+    if not diff_requested:
+        try:
+            if _ensure_gitignore_entries(paths):
+                plan.warnings.append("gitignore_updated_with_pi_entries")
+        except OSError as exc:
+            plan.warnings.append(f"gitignore_update_failed: {exc}")
+
     pi_verified_final = _pi_installed(paths) if not diff_requested else False
     return SyncResult(
         created=created,

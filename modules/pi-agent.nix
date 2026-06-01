@@ -107,13 +107,25 @@ let
 
         # Paired check
         if [ ! -f "$PAIRED_FILE" ]; then
+          # Auto-detect pairing from pi-telegram config
+          _TELEGRAM_CONFIG="$DEVENV_ROOT/''${MYPI_AGENT_ROOT:-.agents/pi}/.pi-state/telegram.json"
+          if [ -f "$_TELEGRAM_CONFIG" ]; then
+            _ALLOWED_USER="$(grep -o '"allowedUserId":[[:space:]]*[0-9]\+' "$_TELEGRAM_CONFIG" 2>/dev/null | grep -o '[0-9]\+$' || true)"
+            if [ -n "$_ALLOWED_USER" ]; then
+              mkdir -p "$(dirname "$PAIRED_FILE")"
+              touch "$PAIRED_FILE"
+            fi
+          fi
+        fi
+
+        if [ ! -f "$PAIRED_FILE" ]; then
           if [ -z "$TELEGRAM_SECTION_SHOWN" ]; then
             echo ""
             echo "  Telegram:"
           fi
           echo "    ! Bot not yet paired"
           echo "      -> Start Pi, run /telegram-connect, then send /start to your bot"
-          echo "      -> After pairing, run: touch .mypi/telegram.paired"
+          echo "      -> (pairing is now detected automatically)"
           TELEGRAM_SECTION_SHOWN=1
         fi
 
@@ -146,6 +158,40 @@ let
       "--profile ${lib.escapeShellArg cfg.secrets.profile} "
     else
       "";
+
+  # -- Pi state directory seeding --
+  # Seed PI_CODING_AGENT_DIR with settings.json and resource directories on shell entry.
+  piStateSeed =
+    let
+      stateDir = "${config.devenv.root}/${cfg.root}/.pi-state";
+      settingsSeed =
+        if cfg.settings != {} then
+          ''
+            _PI_SETTINGS_DESIRED=${lib.escapeShellArg (builtins.toJSON cfg.settings)}
+            _PI_SETTINGS_FILE="${stateDir}/settings.json"
+            if [ ! -f "$_PI_SETTINGS_FILE" ] || [ "$(cat "$_PI_SETTINGS_FILE")" != "$_PI_SETTINGS_DESIRED" ]; then
+              printf '%s' "$_PI_SETTINGS_DESIRED" > "$_PI_SETTINGS_FILE"
+            fi
+          ''
+        else
+          "";
+      resourceDirs = [ "extensions" "skills" "prompts" "scripts" ];
+      syncResource = dir:
+        let
+          src = cfg.stateSeedDir + "/${dir}";
+        in
+        lib.optionalString (cfg.stateSeedDir != null && builtins.pathExists src) ''
+          if [ -d ${lib.escapeShellArg (toString src)} ]; then
+            mkdir -p "${stateDir}/${dir}"
+            ${pkgs.rsync}/bin/rsync -a --delete ${lib.escapeShellArg (toString src)}/ "${stateDir}/${dir}/"
+          fi
+        '';
+    in
+    ''
+      mkdir -p "${stateDir}"
+      ${settingsSeed}
+      ${lib.concatMapStrings syncResource resourceDirs}
+    '';
 in
 {
   options.piAgent = {
@@ -251,6 +297,24 @@ in
       default = true;
       description = "Enable pi-telegram extension integration.";
     };
+
+    settings = lib.mkOption {
+      type = lib.types.attrs;
+      default = {};
+      description = ''
+        Pi settings.json content, written to the project-local PI_CODING_AGENT_DIR on shell entry.
+        Example: { defaultProvider = "anthropic"; defaultModel = "claude-opus-4-5"; }
+      '';
+    };
+
+    stateSeedDir = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Path to a directory whose subdirectories (extensions/, skills/, prompts/, scripts/)
+        are synced into the project-local PI_CODING_AGENT_DIR on shell entry.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -276,6 +340,7 @@ in
       MYPI_ALLOW_FLOATING_PI_VERSION = lib.boolToString cfg.allowFloatingPiVersion;
       MYPI_AGENT_ROOT = cfg.root;
       MYPI_TELEGRAM_ENABLE = lib.boolToString cfg.telegram.enable;
+      PI_CODING_AGENT_DIR = "${config.devenv.root}/${cfg.root}/.pi-state";
     };
 
     packages = [ cfg.nodePackage ];
@@ -344,6 +409,7 @@ in
 
     enterShell = lib.mkAfter ''
       ${secretsEnv}
+      ${piStateSeed}
       ${bootstrapCmd}
       ${secretspecSetupCmd}
       ${usageCheckCmd}
