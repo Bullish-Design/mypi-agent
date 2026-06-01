@@ -18,6 +18,33 @@ from .secrets import (
 )
 
 
+TELEGRAM_TOKEN_ENV_VARS = (
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_BOT_KEY",
+    "TELEGRAM_TOKEN",
+    "TELEGRAM_KEY",
+)
+
+
+def _telegram_token_available() -> bool:
+    """Check if any accepted Telegram bot token env var is non-empty."""
+    return any(
+        os.environ.get(var, "").strip()
+        for var in TELEGRAM_TOKEN_ENV_VARS
+    )
+
+
+def _telegram_enabled() -> bool:
+    """Check if telegram integration is enabled via Nix module option."""
+    return os.environ.get("MYPI_TELEGRAM_ENABLE", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _telegram_paired(paths) -> bool:
+    """Check if the user has completed the Telegram pairing flow."""
+    paired_file = paths.project_root / ".mypi" / "telegram.paired"
+    return paired_file.exists()
+
+
 class DoctorResult(MypiBaseModel):
     errors: list[str]
     warnings: list[str]
@@ -236,6 +263,32 @@ def run_doctor(paths: Paths) -> DoctorResult:
     elif pi_detail and "node_modules/.bin/pi" in pi_detail:
         warnings.append("pi_resolves_to_node_modules_may_bypass_secretspec")
         diagnostics.append({"code": "pi_resolves_to_node_modules_may_bypass_secretspec", "severity": "warning"})
+
+    # -- Telegram readiness (spec: DoctorChecksTelegram) --
+    if _telegram_enabled():
+        # Check extension installed
+        ext_path = paths.agent_root / "node_modules" / "@llblab" / "pi-telegram"
+        if not ext_path.exists():
+            warnings.append("telegram_extension_not_installed")
+            diagnostics.append({"code": "telegram_extension_not_installed", "severity": "warning"})
+        # Check token available
+        if not _telegram_token_available():
+            warnings.append("telegram_bot_token_not_configured")
+            diagnostics.append({"code": "telegram_bot_token_not_configured", "severity": "warning"})
+        # Check paired state
+        if _telegram_token_available() and not _telegram_paired(paths):
+            warnings.append("telegram_not_paired")
+            diagnostics.append({"code": "telegram_not_paired", "severity": "info"})
+
+        # Optional: check secretspec.toml declares TELEGRAM_BOT_TOKEN (spec: invariant TelegramTokenDeclaredInSecretspecConfig)
+        if spec_toml_path.exists():
+            try:
+                spec_text = spec_toml_path.read_text(encoding="utf-8")
+                if "TELEGRAM_BOT_TOKEN" not in spec_text and "TELEGRAM_BOT_KEY" not in spec_text:
+                    warnings.append("telegram_token_not_declared_in_secretspec")
+                    diagnostics.append({"code": "telegram_token_not_declared_in_secretspec", "severity": "warning"})
+            except OSError:
+                pass
 
     # -- Secrets doctor sub-check --
     # Check that the dotenv file actually has values

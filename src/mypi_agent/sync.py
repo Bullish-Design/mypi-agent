@@ -19,6 +19,10 @@ MANAGED_SETTINGS_KEYS = ["extensions", "skills", "prompts", "themes", "enableSki
 SETTINGS_SCHEMA_VERSION = 1
 MANIFEST_SCHEMA_VERSION = 1
 
+# Telegram extension
+TELEGRAM_EXTENSION_PACKAGE = "@llblab/pi-telegram"
+TELEGRAM_EXTENSION_DIR = "pi-telegram"  # directory name inside node_modules
+
 
 class WriteAction(MypiBaseModel):
     path: str
@@ -41,6 +45,7 @@ class SyncResult(MypiBaseModel):
     shim_updated: bool
     trigger: str
     pi_installed: bool
+    telegram_extension_installed: bool
     hash_inputs_changed: bool
     diff_requested: bool
     upgrade_target: str
@@ -64,6 +69,7 @@ class SyncPlan:
     would_upgrade_count: int
     preserved_locally_modified_count: int
     pi_installed: bool
+    telegram_extension_installed: bool
     warnings: list[str]
     manifest_healed: bool
     shim_updated: bool
@@ -93,11 +99,14 @@ def _read_json_or_none(path: Path) -> object | None:
         return None
 
 
-def _settings_payload(agent_root_relative: str) -> dict[str, object]:
+def _settings_payload(agent_root_relative: str, *, telegram_extension_installed: bool = False) -> dict[str, object]:
     npm = shutil.which("npm")
+    extensions: list[str] = [f"../{agent_root_relative}/extensions"]
+    if telegram_extension_installed:
+        extensions.append(f"../{agent_root_relative}/node_modules/{TELEGRAM_EXTENSION_PACKAGE}")
     return {
         "packages": [],
-        "extensions": [f"../{agent_root_relative}/extensions"],
+        "extensions": extensions,
         "skills": [f"../{agent_root_relative}/skills"],
         "prompts": [f"../{agent_root_relative}/prompts"],
         "themes": [f"../{agent_root_relative}/themes"],
@@ -290,8 +299,29 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
             else:
                 warnings.append("pi_agent_install_failed")
 
+    # -- Telegram extension install (spec: InstallTelegramExtension) --
+    telegram_extension_installed = False
+    telegram_enable = os.environ.get("MYPI_TELEGRAM_ENABLE", "").strip().lower() in {"1", "true", "yes"}
+    if telegram_enable and not diff_requested:
+        ext_path = paths.agent_root / "node_modules" / TELEGRAM_EXTENSION_PACKAGE
+        if not ext_path.exists():
+            if npm is not None:
+                ext_install = subprocess.run(
+                    [npm, "install", "--prefix", str(paths.agent_root),
+                     *npm_install_flags, TELEGRAM_EXTENSION_PACKAGE],
+                    text=True, capture_output=True, check=False,
+                )
+                if ext_install.returncode == 0:
+                    telegram_extension_installed = True
+                else:
+                    warnings.append("telegram_extension_install_failed")
+            else:
+                warnings.append("telegram_extension_install_skipped_no_npm")
+        else:
+            telegram_extension_installed = True
+
     agent_root_relative = paths.agent_root.relative_to(paths.project_root).as_posix()
-    settings_payload = _settings_payload(agent_root_relative)
+    settings_payload = _settings_payload(agent_root_relative, telegram_extension_installed=telegram_extension_installed)
     existing_settings = _read_json_or_none(paths.settings_path)
     merged_settings_payload = _merge_settings(existing_settings, settings_payload)
     shim_updated = repair_shim or not paths.settings_path.exists() or existing_settings != merged_settings_payload
@@ -368,6 +398,7 @@ def _build_sync_plan(paths: Paths, repair_shim: bool, trigger: str, diff_request
         would_upgrade_count=would_upgrade_count,
         preserved_locally_modified_count=preserved_locally_modified_count,
         pi_installed=pi_installed,
+        telegram_extension_installed=telegram_extension_installed,
         warnings=warnings,
         manifest_healed=manifest_healed,
         shim_updated=shim_updated,
@@ -476,6 +507,7 @@ def run_sync(
         shim_updated=plan.shim_updated,
         trigger=trigger,
         pi_installed=pi_verified_final,
+        telegram_extension_installed=plan.telegram_extension_installed,
         hash_inputs_changed=hash_inputs_changed,
         diff_requested=diff_requested,
         upgrade_target=upgrade_target,

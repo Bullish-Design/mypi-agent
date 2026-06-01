@@ -1,0 +1,228 @@
+-- allium: 3
+
+-- Telegram integration via @llblab/pi-telegram extension.
+--
+-- Scope: Extension auto-installation, bot token from secretspec,
+-- startup screen status, and doctor diagnostics.
+--
+-- Excludes:
+--   - Process management (Pi runs interactively, user invokes /telegram-connect)
+--   - Daemon/service wrappers (not needed for laptop use case)
+--   - Auto-connect on Pi startup (deferred)
+--   - Remote deployment (deferred)
+--   - Session file manipulation (pi-telegram handles this internally)
+--   - Bidirectional handoff (terminal and Telegram share the same Pi session)
+--   - User allowlists (first-pair model used by pi-telegram)
+
+use "./core.allium" as core
+use "./environment.allium" as environment
+use "./doctor.allium" as doctor
+use "./secretspec.allium" as secretspec
+
+-- Generic extension entity.
+-- pi-telegram is the first extension; future extensions reuse this pattern.
+
+entity Extension {
+    name: String
+    installed: Boolean
+    npm_package: String
+    installation_verified: Boolean
+}
+
+default Extension telegram_extension = {
+    name: "pi-telegram"
+    installed: false
+    npm_package: "@llblab/pi-telegram"
+    installation_verified: false
+}
+
+-- Bot token sourced from secretspec via devenv environment.
+-- pi-telegram accepts TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_KEY,
+-- TELEGRAM_TOKEN, or TELEGRAM_KEY as aliases.
+-- The token value itself is never written to disk, logs, or state files.
+
+entity TelegramBotToken {
+    available: Boolean
+    source: secretspec | none
+    token_name: String when available
+}
+
+-- Paired state tracked via local marker file.
+-- The user creates .mypi/telegram.paired after completing
+-- the /start flow in Telegram to suppress the pairing reminder.
+-- Cannot be detected automatically (would require Telegram API query).
+
+entity TelegramPaired {
+    paired: Boolean
+    state_file_exists: Boolean
+    state_file_path: String
+}
+
+-- Startup screen notes displayed on devenv shell entry.
+-- Only shown when telegram.enable is true.
+-- Contains actionable guidance for incomplete setup steps.
+-- Ready requires: token available, extension installed, and paired.
+-- Once all three are met, shows a single "ready" status or
+-- disappears entirely.
+
+entity TelegramStartupNotes {
+    token_configured: Boolean
+    extension_installed: Boolean
+    paired: Boolean
+    ready: Boolean
+    has_actionable_notes: Boolean
+    section_visible: Boolean
+}
+
+-- Extension installation.
+-- Uses the same npm install mechanism as pi-agent itself
+-- (repo-scoped prefix, pinned flags, same node runtime).
+
+rule InstallTelegramExtension {
+    when: SyncCompleted()
+    requires: environment/ModuleOptions.telegram_enable
+    requires: not telegram_extension.installed
+    ensures: telegram_extension.installed = true
+    ensures: telegram_extension.installation_verified = true
+    @guidance
+        -- Install via npm with repo-scoped configuration:
+        -- npm install --prefix "$MYPI_AGENT_ROOT" \
+        --   --ignore-scripts --no-audit --no-fund \
+        --   "@llblab/pi-telegram"
+        -- After install, verify that the extension package exists
+        -- in node_modules and that installation_verified = true.
+}
+
+-- Token availability detection.
+-- TELEGRAM_BOT_TOKEN is provided by secretspec via devenv environment.
+-- The token value itself is not captured here — only presence/absence.
+
+rule DetectTelegramToken {
+    when: ShellEntered()
+    requires: environment/ModuleOptions.telegram_enable
+    ensures: if environment/ShellEnvironment.telegram_bot_token_available:
+        TelegramBotToken.available = true
+        TelegramBotToken.source = secretspec
+    ensures: if not environment/ShellEnvironment.telegram_bot_token_available:
+        TelegramBotToken.available = false
+        TelegramBotToken.source = none
+    @guidance
+        -- Check environment for any accepted token variable name:
+        -- TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_KEY, TELEGRAM_TOKEN, TELEGRAM_KEY.
+        -- Only check non-empty — no format validation needed.
+}
+
+-- Paired state detection.
+-- Checks for the user-managed .mypi/telegram.paired marker file.
+
+rule DetectPairedState {
+    when: ShellEntered()
+    ensures: TelegramPaired.state_file_path =
+        environment/ProjectRoot.path + "/" + ".mypi/telegram.paired"
+    ensures: TelegramPaired.state_file_exists =
+        file_exists(TelegramPaired.state_file_path)
+    ensures: TelegramPaired.paired = TelegramPaired.state_file_exists
+    @guidance
+        -- Check for .mypi/telegram.paired in the project root.
+        -- This is a user-managed marker — the user creates it
+        -- after completing the /start flow in Telegram.
+        -- Content is irrelevant; existence is the signal.
+}
+
+-- Startup screen content.
+-- Computes what the shell entry screen should display about Telegram.
+
+rule TelegramStartupScreenContent {
+    when: ShellEntered()
+    ensures: TelegramStartupNotes.section_visible =
+        environment/ModuleOptions.telegram_enable
+    ensures: if environment/ModuleOptions.telegram_enable:
+        TelegramStartupNotes.token_configured =
+            TelegramBotToken.available
+        TelegramStartupNotes.extension_installed =
+            telegram_extension.installed
+        TelegramStartupNotes.paired =
+            TelegramPaired.paired
+        TelegramStartupNotes.ready =
+            TelegramBotToken.available
+            and telegram_extension.installed
+            and TelegramPaired.paired
+        TelegramStartupNotes.has_actionable_notes =
+            not TelegramStartupNotes.ready
+    @guidance
+        -- Display logic (terminal rendering is implementation detail):
+        --
+        -- When section_visible and not ready:
+        --   "Telegram:" header
+        --   If token not configured:
+        --     "! No bot token configured"
+        --     "-> Create a bot via @BotFather, then add TELEGRAM_BOT_TOKEN to secretspec"
+        --   If extension not installed:
+        --     "! pi-telegram extension not installed"
+        --     "-> Run: mypi sync"
+        --   If token configured but not paired:
+        --     "! Bot not yet paired"
+        --     "-> Start Pi, run /telegram-connect, then send /start to your bot"
+        --     "-> After pairing, run: touch .mypi/telegram.paired"
+        --
+        -- When ready:
+        --   "Telegram: OK (ready to use)" or suppress section entirely.
+}
+
+-- Doctor checks are defined in doctor.allium (imports this spec).
+-- They fire on DoctorRequested and emit DoctorWarning for:
+--   - telegram_extension_not_installed (when telegram.enable and extension missing)
+--   - telegram_bot_token_not_configured (when telegram.enable and token missing)
+
+-- Invariants
+
+invariant TelegramTokenOnlyViaSecretspec {
+    -- When telegram is enabled, the token must flow through
+    -- secretspec. Manual env exports and env files are not
+    -- valid sources. The TELEGRAM_BOT_TOKEN is declared in
+    -- secretspec.toml and injected into the devenv environment
+    -- by secretspec. The scripts.pi wrapper uses secretspec run
+    -- to inject keys into the Pi process only.
+    environment/ModuleOptions.telegram_enable implies
+        TelegramBotToken.source in {secretspec, none}
+}
+
+invariant TelegramPairedFileInProjectRoot {
+    -- The paired marker file always lives at
+    -- <project_root>/.mypi/telegram.paired.
+    -- It is repo-scoped, one per project.
+    TelegramPaired.state_file_exists implies
+        TelegramPaired.state_file_path.contains(".mypi/telegram.paired")
+}
+
+invariant TelegramTokenDeclaredInSecretspecConfig {
+    -- When telegram is enabled and the bot token is configured,
+    -- TELEGRAM_BOT_TOKEN must be declared as a secret in
+    -- secretspec.toml. The secretspec config file must contain
+    -- at least one secret key entry (which includes the token).
+    environment/ModuleOptions.telegram_enable and TelegramBotToken.available
+        implies secretspec/SecretspecConfigFile.has_at_least_one_secret_key
+}
+
+invariant TelegramExtensionInstalledWhenEnabled {
+    -- After sync completes with telegram enabled, the extension must be installed.
+    environment/ModuleOptions.telegram_enable and core/SyncRun.completed
+        implies telegram_extension.installed
+}
+
+invariant TelegramTokenNeverPersisted {
+    -- Token availability may be checked. Token value must never be written
+    -- to generated config files, logs, state files, or the manifest.
+    -- Enforced by architecture: token flows through secretspec wrapper
+    -- into Pi process environment only. No generated file contains the value.
+}
+
+invariant TelegramOnlyShownWhenEnabled {
+    -- Startup screen section is only visible when the feature is enabled.
+    TelegramStartupNotes.section_visible = environment/ModuleOptions.telegram_enable
+}
+
+invariant ExtensionInstallationVerified {
+    -- Installation flag must reflect actual verification.
+    telegram_extension.installed implies telegram_extension.installation_verified
+}

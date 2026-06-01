@@ -8,6 +8,8 @@
 -- P2.3: Rename pi_agent_* error reasons to pi_*.
 
 use "./core.allium" as core
+use "./telegram.allium" as telegram
+use "./environment.allium" as environment
 
 entity DoctorRun {
     requested: Boolean
@@ -54,6 +56,8 @@ surface LocalDoctorTriggers {
         DoctorWarning(reason: "pi_version_mismatch")
         DoctorWarning(reason: "missing_npm_command_in_settings")
         DoctorWarning(reason: "missing_resource_directory")
+        DoctorWarning(reason: "telegram_extension_not_installed")
+        DoctorWarning(reason: "telegram_bot_token_not_configured")
 }
 
 rule DoctorRunStarted {
@@ -141,6 +145,22 @@ rule DoctorPerformsWarningChecks {
     -- P1.5: Resource directory check
     ensures: if AgentRoot.exists and not AgentRoot.required_dirs_present:
         DoctorWarning(reason: "missing_resource_directory")
+}
+
+-- Telegram readiness checks (warnings only — Telegram is value-add, not core)
+
+rule DoctorChecksTelegram {
+    when: DoctorRequested()
+    requires: environment/ModuleOptions.telegram_enable
+    ensures: if not telegram/Extension.installed:
+        DoctorWarning(reason: "telegram_extension_not_installed")
+    ensures: if not telegram/TelegramBotToken.available:
+        DoctorWarning(reason: "telegram_bot_token_not_configured")
+    @guidance
+        -- When telegram.enable is true, check:
+        -- 1. pi-telegram extension installed in agent root
+        -- 2. TELEGRAM_BOT_TOKEN available in environment (non-empty)
+        -- Both are warnings only — system functions without Telegram.
 }
 
 rule DoctorCountsErrors {

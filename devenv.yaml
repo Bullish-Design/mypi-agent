@@ -10,7 +10,7 @@ inputs:
     url: github:cachix/nixpkgs-python
     follows: nixpkgs
   allium-env:
-    url: github:Bullish-Design/allium-env?ref=v0.1.0
+    url: github:Bullish-Design/allium-env?ref=v0.3.5
     flake: false
 
 imports:

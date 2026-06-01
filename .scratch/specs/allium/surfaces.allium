@@ -192,3 +192,30 @@ surface PathsCommandSurface {
     provides:
         PathsRequested()
 }
+
+-- Secrets command surface
+-- `mypi secrets init|check|doctor|path` — manage per-repo SecretSpec secrets.
+-- The individual repo provider pattern gives each project its own dotenv
+-- provider file so canonical API key names can be reused across repos.
+
+surface SecretsCommandSurface {
+    facing _: SettingsShim
+
+    provides:
+        SecretsInitRequested(if_missing: Boolean)
+        SecretsCheckRequested()
+        SecretsDoctorRequested()
+        SecretsPathRequested()
+
+    @guarantee NoSecretValuesExposed
+        -- Commands never print or log raw API key values.
+        -- Only file paths, setup status, and pass/fail results are shown.
+
+    @guarantee ProviderOutsideRepo
+        -- The dotenv provider file always lives outside the project repo
+        -- under XDG_CONFIG_HOME/mypi-agent/secrets/<slug>/.env.
+
+    @guarantee UncommittedConfig
+        -- devenv.local.yaml is never committed; secretspec.toml declares
+        -- secret names without values.
+}

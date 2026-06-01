@@ -32,6 +32,7 @@ entity ShellEnvironment {
     npm_config_audit: String
     npm_config_fund: String
     path_includes_node_modules_bin: Boolean
+    telegram_bot_token_available: Boolean
 }
 
 -- Module options from Nix
@@ -46,6 +47,7 @@ entity ModuleOptions {
     bootstrap_mode: first_entry_only | manual_only | every_entry
     allow_floating_pi_version: Boolean
     secrets_enable: Boolean
+    telegram_enable: Boolean
     mypi_agent_version: String
 }
 
@@ -59,6 +61,7 @@ default ModuleOptions module_options = {
     bootstrap_mode: first_entry_only
     allow_floating_pi_version: false
     secrets_enable: true
+    telegram_enable: true
 }
 
 surface EnvironmentSurface {

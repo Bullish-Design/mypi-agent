@@ -68,8 +68,8 @@ def sync_command(
                 result.preserved_locally_modified_count,
             )
         )
-    if result.advisory_shown and result.upgrade_requires_explicit_sync:
-        typer.echo("advisory: upgrades require explicit sync")
+    if result.advisory_shown and result.upgrade_requires_explicit_sync and not result.explicit:
+        typer.echo("advisory: configuration changed; run `mypi sync` to apply upgrades")
 
 
 @app.command("secretspec-setup")

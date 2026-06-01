@@ -56,6 +56,75 @@ let
     else
       "";
 
+  # -- Telegram extension auto-install on shell entry --
+  # If the extension directory is missing, run mypi sync to install it
+  # AND register it in Pi's settings.json (raw npm install is insufficient).
+  telegramAutoInstall =
+    if cfg.telegram.enable then
+      ''
+        _TELEGRAM_EXT_PATH="$DEVENV_ROOT/''${MYPI_AGENT_ROOT:-.agents/pi}/node_modules/@llblab/pi-telegram"
+        if [ ! -d "$_TELEGRAM_EXT_PATH" ]; then
+          echo "  Installing pi-telegram extension..."
+          if mypi sync --trigger shell >/dev/null 2>&1; then
+            echo "  ✓ pi-telegram extension installed"
+          else
+            echo "  ⚠ pi-telegram extension install failed" >&2
+          fi
+        fi
+      ''
+    else
+      "";
+
+  # -- Telegram startup notes (spec: TelegramStartupScreenContent) --
+  telegramStartupNotes =
+    if cfg.telegram.enable then
+      ''
+        # -- Telegram readiness --
+        TELEGRAM_SECTION_SHOWN=""
+        PAIRED_FILE="$DEVENV_ROOT/.mypi/telegram.paired"
+
+        # Token check (any accepted env var non-empty)
+        if [ -z "''${TELEGRAM_BOT_TOKEN:-}" ] && [ -z "''${TELEGRAM_BOT_KEY:-}" ] && \
+           [ -z "''${TELEGRAM_TOKEN:-}" ] && [ -z "''${TELEGRAM_KEY:-}" ]; then
+          echo ""
+          echo "  Telegram:"
+          echo "    ! No bot token configured"
+          echo "      -> Create a bot via @BotFather, then add TELEGRAM_BOT_TOKEN to secretspec"
+          TELEGRAM_SECTION_SHOWN=1
+        fi
+
+        # Extension check
+        EXT_PATH="$DEVENV_ROOT/''${MYPI_AGENT_ROOT:-.agents/pi}/node_modules/@llblab/pi-telegram"
+        if [ ! -d "$EXT_PATH" ]; then
+          if [ -z "$TELEGRAM_SECTION_SHOWN" ]; then
+            echo ""
+            echo "  Telegram:"
+          fi
+          echo "    ! pi-telegram extension not installed"
+          echo "      -> Run: mypi sync"
+          TELEGRAM_SECTION_SHOWN=1
+        fi
+
+        # Paired check
+        if [ ! -f "$PAIRED_FILE" ]; then
+          if [ -z "$TELEGRAM_SECTION_SHOWN" ]; then
+            echo ""
+            echo "  Telegram:"
+          fi
+          echo "    ! Bot not yet paired"
+          echo "      -> Start Pi, run /telegram-connect, then send /start to your bot"
+          echo "      -> After pairing, run: touch .mypi/telegram.paired"
+          TELEGRAM_SECTION_SHOWN=1
+        fi
+
+        if [ -z "$TELEGRAM_SECTION_SHOWN" ]; then
+          echo ""
+          echo "  Telegram: OK (ready to use)"
+        fi
+      ''
+    else
+      "";
+
   # -- Secrets env vars --
   secretsEnv =
     let
@@ -176,6 +245,12 @@ in
       default = true;
       description = "Print configuration status and quick-reference usage guide on shell entry.";
     };
+
+    telegram.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable pi-telegram extension integration.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -200,6 +275,7 @@ in
       MYPI_PI_PACKAGE_VERSION = if cfg.piPackageVersion == null then "" else cfg.piPackageVersion;
       MYPI_ALLOW_FLOATING_PI_VERSION = lib.boolToString cfg.allowFloatingPiVersion;
       MYPI_AGENT_ROOT = cfg.root;
+      MYPI_TELEGRAM_ENABLE = lib.boolToString cfg.telegram.enable;
     };
 
     packages = [ cfg.nodePackage ];
@@ -271,6 +347,8 @@ in
       ${bootstrapCmd}
       ${secretspecSetupCmd}
       ${usageCheckCmd}
+      ${telegramAutoInstall}
+      ${telegramStartupNotes}
     '';
 
     profiles.pi.module = {

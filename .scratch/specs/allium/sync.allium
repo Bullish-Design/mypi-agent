@@ -237,6 +237,43 @@ rule SyncReleaseLock {
         -- Lock is released even on failure (use try/finally).
 }
 
+-- Managed resource syncing.
+-- Skills and prompt templates are copied from the repo's managed
+-- source directories (.agents/skills/, .agents/prompts/) into the
+-- agent root on each sync. Same-named files are overwritten; files
+-- present only in the agent root are left untouched.
+-- Prompt templates may use jinja/minijinja variable substitution.
+-- Rendered output is written as .md files in the agent root.
+
+rule SyncCopiesManagedResources {
+    when: SyncCompleted()
+    ensures: for skill_file in ManagedSourceSkills:
+        AgentRootSkillFile(skill_file).exists = true
+        AgentRootSkillFile(skill_file).content =
+            ManagedSourceSkills.content(skill_file)
+    ensures: for prompt_file in ManagedSourcePrompts:
+        AgentRootPromptFile(prompt_file).exists = true
+        AgentRootPromptFile(prompt_file).content =
+            if ManagedSourcePrompts.is_template(prompt_file):
+                RenderJinja(ManagedSourcePrompts.content(prompt_file))
+            else:
+                ManagedSourcePrompts.content(prompt_file)
+    ensures: for user_file in AgentRootSkills where user_file not in ManagedSourceSkills:
+        AgentRootSkillFile(user_file).untouched = true
+    ensures: for user_file in AgentRootPrompts where user_file not in ManagedSourcePrompts:
+        AgentRootPromptFile(user_file).untouched = true
+    @guidance
+        -- Source directories:
+        --   Skills:  .agents/skills/  → .agents/pi/skills/
+        --   Prompts: .agents/prompts/ → .agents/pi/prompts/
+        -- Only .md files are copied for skills.
+        -- Prompt templates: .j2 files are rendered via minijinja,
+        -- .md files are copied as-is.
+        -- Jinja context includes: repo_name, project_slug, and any
+        -- variables declared in devenv.local.yaml under mypi.templateVars.
+        -- User-added files in the agent root are never deleted.
+}
+
 -- R-024: Atomic writes
 
 invariant AtomicWritePolicy {
