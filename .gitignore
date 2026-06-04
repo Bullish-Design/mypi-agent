@@ -30,6 +30,7 @@ devenv.local.nix
 .pi/**
 .agents/pi/**
 # .agents/**
+.scratch/**
 
 # C extensions
 *.so
