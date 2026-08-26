@@ -4,19 +4,7 @@
     (inputs.mypi-agent + "/modules/pi-agent.nix")
   ];
 
-  piAgent = {
-    enable = true;
-    settings = {
-      defaultProvider = "openrouter";
-      defaultModel = "stealth/ox-alpha";
-    };
-    models.providers.openrouter.models = [
-      {
-        id = "stealth/ox-alpha";
-        reasoning = true;
-      }
-    ];
-  };
+  piAgent.enable = true;
 
   tasks."fixture:verify".exec = ''
     set -euxo pipefail
@@ -48,10 +36,6 @@
     SH
     chmod +x .fake-bin/npm
     export PATH="$PWD/.fake-bin:$PATH"
-    test -f .agents/pi/.pi-state/settings.json
-    grep -F '"defaultProvider":"openrouter"' .agents/pi/.pi-state/settings.json
-    test -f .agents/pi/.pi-state/models.json
-    grep -F '"id":"stealth/ox-alpha"' .agents/pi/.pi-state/models.json
     mypi sync
     mypi doctor
   '';
