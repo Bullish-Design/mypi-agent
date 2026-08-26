@@ -160,7 +160,7 @@ let
       "";
 
   # -- Pi state directory seeding --
-  # Seed PI_CODING_AGENT_DIR with settings.json and resource directories on shell entry.
+  # Seed PI_CODING_AGENT_DIR with settings.json, models.json, and resource directories on shell entry.
   piStateSeed =
     let
       stateDir = "${config.devenv.root}/${cfg.root}/.pi-state";
@@ -171,6 +171,17 @@ let
             _PI_SETTINGS_FILE="${stateDir}/settings.json"
             if [ ! -f "$_PI_SETTINGS_FILE" ] || [ "$(cat "$_PI_SETTINGS_FILE")" != "$_PI_SETTINGS_DESIRED" ]; then
               printf '%s' "$_PI_SETTINGS_DESIRED" > "$_PI_SETTINGS_FILE"
+            fi
+          ''
+        else
+          "";
+      modelsSeed =
+        if cfg.models != {} then
+          ''
+            _PI_MODELS_DESIRED=${lib.escapeShellArg (builtins.toJSON cfg.models)}
+            _PI_MODELS_FILE="${stateDir}/models.json"
+            if [ ! -f "$_PI_MODELS_FILE" ] || [ "$(cat "$_PI_MODELS_FILE")" != "$_PI_MODELS_DESIRED" ]; then
+              printf '%s' "$_PI_MODELS_DESIRED" > "$_PI_MODELS_FILE"
             fi
           ''
         else
@@ -190,6 +201,7 @@ let
     ''
       mkdir -p "${stateDir}"
       ${settingsSeed}
+      ${modelsSeed}
       ${lib.concatMapStrings syncResource resourceDirs}
     '';
 in
@@ -304,6 +316,15 @@ in
       description = ''
         Pi settings.json content, written to the project-local PI_CODING_AGENT_DIR on shell entry.
         Example: { defaultProvider = "anthropic"; defaultModel = "claude-opus-4-5"; }
+      '';
+    };
+
+    models = lib.mkOption {
+      type = lib.types.attrs;
+      default = {};
+      description = ''
+        Pi models.json content, written to the project-local PI_CODING_AGENT_DIR on shell entry.
+        Custom models for built-in providers are merged with Pi's bundled model catalog by model ID.
       '';
     };
 

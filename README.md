@@ -27,6 +27,9 @@ Development-only wiring lives under `dev/` and is not part of the consumer impor
 - `piAgent.allowFloatingPiVersion` (default `false`)
 - `piAgent.npmInstallFlags` (default `["--ignore-scripts","--no-audit","--no-fund"]`)
 - `piAgent.bootstrap.mode` (`first_entry_only` | `manual_only` | `every_entry`)
+- `piAgent.settings` (attributes written to the project-local Pi `settings.json`)
+- `piAgent.models` (attributes written to the project-local Pi `models.json`)
+- `piAgent.stateSeedDir` (optional resource seed containing `extensions/`, `skills/`, `prompts/`, or `scripts/`)
 
 ## Generated files
 
