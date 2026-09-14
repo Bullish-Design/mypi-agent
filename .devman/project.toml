@@ -1,0 +1,4 @@
+schema = 1
+project = "mypi-agent"
+groups = ["base"]
+policy = "stable"
