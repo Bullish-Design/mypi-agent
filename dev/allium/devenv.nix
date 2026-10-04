@@ -4,11 +4,4 @@
 { pkgs, ... }:
 
 {
-  allium.enable = true;
-  allium.specsDir = ".scratch/specs";
-  allium.codexSkills = {
-    enable = true;
-    autoInstall = true;
-    targetDir = ".agents/skills";
-  };
 }
